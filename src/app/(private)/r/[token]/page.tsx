@@ -8,6 +8,8 @@ import { filmEmbedUrl, filmHost } from "@/lib/film";
 import { resolveCoachLink } from "@/lib/services/access";
 import { payoutsUrl } from "@/lib/services/links";
 import { markViewed } from "@/lib/services/lifecycle";
+import { mailtoReply } from "@/lib/services/email-native";
+import { WrittenReplyForm } from "@/components/written-reply-form";
 import { getDeps } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +69,24 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
     );
   }
 
+  const recorder = (
+    <Recorder
+      uploadUrlEndpoint={`/api/coach/${token}/upload-url`}
+      submitEndpoint={`/api/coach/${token}/submit`}
+      acceptEndpoint={`/api/coach/${token}/accept`}
+      submitLabel={`Submit & claim ${amount}`}
+      prompts={["Who you are + what you watched", `What level you see ${first} at`, "Strengths, fixes + one next step"]}
+      withTakeaways
+      done={
+        <div className="rounded-2xl bg-success-50 p-6 text-center ring-1 ring-[#c3e8d2]">
+          <p className="text-4xl">✓</p>
+          <p className="mt-2 text-xl font-bold text-navy">Sent to {first}&apos;s family</p>
+          <p className="mt-1 text-sm text-muted">Your {amount} is on its way via Stripe. You can close this page.</p>
+        </div>
+      }
+    />
+  );
+
   return (
     <div className="space-y-5">
       <div className="card overflow-hidden">
@@ -106,35 +126,45 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
         )}
       </section>
 
-      <section className="card p-5">
-        <h2 className="font-semibold">2. Record 30–60 seconds</h2>
-        <ul className="mt-2 space-y-1 text-sm text-muted">
-          <li>• Introduce yourself and what you watched</li>
-          <li>• 1–2 genuine strengths</li>
-          <li>• 1–2 things to improve, and one next step</li>
-          <li>• Please don&apos;t promise an offer, scholarship, admission or roster spot</li>
-        </ul>
-        <div className="mt-4">
-          <Recorder
-            uploadUrlEndpoint={`/api/coach/${token}/upload-url`}
-            submitEndpoint={`/api/coach/${token}/submit`}
-            acceptEndpoint={`/api/coach/${token}/accept`}
-            submitLabel={`Submit Video & Claim ${amount}`}
-            prompts={["Who you are + what you watched", `1–2 strengths you saw in ${first}`, "1–2 things to improve + one next step"]}
-            withTakeaways
-            done={
-              <div className="rounded-2xl bg-success-50 p-6 text-center ring-1 ring-[#c3e8d2]">
-                <p className="text-4xl">✓</p>
-                <p className="mt-2 text-xl font-bold text-navy">Sent to {first}&apos;s family</p>
-                <p className="mt-1 text-sm text-muted">Your {amount} is on its way via Stripe. You can close this page.</p>
-              </div>
-            }
-          />
-        </div>
-      </section>
+      {req.format !== "video" ? (
+        <section className="card p-5">
+          <h2 className="font-semibold">2. {req.format === "voice" ? "Send a 1–2 minute voice memo" : "Send your written take"}</h2>
+          <p className="mt-1 text-sm text-muted">
+            {req.format === "voice"
+              ? "Easiest from your phone: tap below, attach a voice memo (Voice Memos → ••• → Share → Mail) and send."
+              : "Easiest from your phone: tap below — your email app opens with the template ready. Fill it in and send."}
+          </p>
+          <a href={mailtoReply(req)} className="btn-primary mt-4 w-full">✉︎ Reply from my email</a>
+          {req.format === "written" && (
+            <details className="mt-4 rounded-xl border border-line p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Or type it here instead</summary>
+              <div className="mt-3"><WrittenReplyForm token={token} amount={amount} first={first} /></div>
+            </details>
+          )}
+          {req.format === "voice" && (
+            <details className="mt-4 rounded-xl border border-line p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Or record a short video here instead</summary>
+              <div className="mt-3">{recorder}</div>
+            </details>
+          )}
+        </section>
+      ) : (
+        <section className="card p-5">
+          <h2 className="font-semibold">2. Record 30–60 seconds</h2>
+          <ul className="mt-2 space-y-1 text-sm text-muted">
+            <li>• Introduce yourself and what you watched</li>
+            <li>• What level you see {first} at</li>
+            <li>• 1–2 strengths, 1–2 things to improve, and one next step</li>
+          </ul>
+          <div className="mt-4">{recorder}</div>
+          <p className="mt-3 text-center text-sm text-muted">
+            Prefer email? <a href={mailtoReply(req)} className="font-semibold text-blue">Reply with a video or a link</a>.
+          </p>
+        </section>
+      )}
 
       <Notice tone="info">
-        Your {amount} is sent automatically via Stripe the moment you submit. Busy? You can decline, or pause new requests from your coach hub.
+        Your {amount} is sent via Stripe as soon as your reply is delivered. Not for you? Reply PASS to our email, or decline below.
       </Notice>
       <p className="pb-6 text-center text-sm">
         <Link href={`/r/${token}/decline`} className="font-medium text-muted underline">Can&apos;t do this one? Decline it</Link>

@@ -9,6 +9,7 @@ import { sendEmail } from "./notify";
 import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest, textCoach } from "./lifecycle";
 import { sendWeeklySummaries } from "./experience";
 import { coachDigest, sms as smsText } from "../email/templates";
+import { mailtoReply, replyAddress, replyTemplate } from "./email-native";
 import type { EvalRequest } from "../types";
 
 const HOUR = 3_600_000;
@@ -126,16 +127,16 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
             req: r, coach, reviewUrl: coachReviewUrl(r), declineUrl: coachDeclineUrl(r),
             unsubscribeUrl: unsubscribeUrl(coach.email!), postalAddress: env.postalAddress(),
             reminder: { daysLeft: Math.max(1, Math.round(hoursLeft / 24)), nudge: claimed[0]!.stage === 0 },
-            hubUrl: hubUrl(coach),
+            hubUrl: hubUrl(coach), mailtoUrl: mailtoReply(r), template: replyTemplate(r.format),
           }),
-          template: "coach_reminder", idempotencyKey: key, requestId: r.id, coachId: coach.id, marketing: true,
+          template: "coach_reminder", idempotencyKey: key, requestId: r.id, coachId: coach.id, marketing: true, replyTo: replyAddress(r),
         });
         await textCoach(deps, coach, r, smsText.coachReminder(r, coachReviewUrl(r), Math.max(1, Math.round(hoursLeft / 24))), `sms-${key}`, "coach_reminder");
       } else {
         await sendEmail(deps, {
           to: coach.email!,
           rendered: coachDigest({
-            coach, items: all.map((r) => ({ req: r, url: coachReviewUrl(r) })), hubUrl: hubUrl(coach),
+            coach, items: all.map((r) => ({ req: r, url: coachReviewUrl(r), replyUrl: mailtoReply(r) })), hubUrl: hubUrl(coach),
             unsubscribeUrl: unsubscribeUrl(coach.email!), postalAddress: env.postalAddress(), finalDay,
           }),
           template: "coach_digest", idempotencyKey: key, coachId: coach.id, marketing: true,

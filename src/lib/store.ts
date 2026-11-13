@@ -36,7 +36,7 @@ export type NewRequest = Omit<
   | "last_error" | "paid_at" | "expires_at" | "coach_notified_at" | "coach_viewed_at" | "accepted_at"
   | "submitted_at" | "completed_at" | "delivered_at" | "declined_at" | "decline_reason" | "expired_at"
   | "refunded_at" | "paid_out_at" | "coach_attested_at" | "last_reminder_at" | "onboarding_email_sent_at"
-  | "purged_at" | "video_deleted_at" | "takeaway_strength" | "takeaway_improve" | "takeaway_next" | "rating" | "would_buy_again" | "rating_comment" | "rated_at" | "film_issue_at" | "film_issue_note" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
+  | "purged_at" | "video_deleted_at" | "takeaway_strength" | "takeaway_improve" | "takeaway_next" | "rating" | "would_buy_again" | "rating_comment" | "rated_at" | "film_issue_at" | "film_issue_note" | "level_read" | "response_text" | "response_kind" | "response_link" | "response_from" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
 >;
 
 export interface Store {
@@ -95,6 +95,10 @@ export interface Store {
 
   /** true = allowed, false = limited */
   rateLimit(key: string, windowSeconds: number, max: number): Promise<boolean>;
+
+  /** Inbound email idempotency: true the first time a provider message id is seen. */
+  claimInbound(id: string, requestId: string | null, fromEmail: string | null): Promise<boolean>;
+  setInboundOutcome(id: string, outcome: string): Promise<void>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,6 +110,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allow_active_college_coaches: true,
   retention_days: 365,
   video_retention_days: 30,
+  format_prices: { written: 2000, voice: 3500, video: 5000 },
   show_directory_listings: true,
   require_payouts_before_booking: false,
 };

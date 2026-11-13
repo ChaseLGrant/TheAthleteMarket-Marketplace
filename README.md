@@ -4,14 +4,13 @@
 and gets a private 30–60 second video evaluation of their athlete's film. No customer or coach accounts, no passwords, no app.
 
 ```
-Family: search → pick coach → one-page form → Stripe Checkout (card HOLD only — not charged yet)
-                                                  │ webhook confirms the hold succeeded (idempotent)
-Coach:  email with "Review & Record" magic link ──┘
-        → watches film → records in browser (or uploads) → "Submit Video & Claim $40"
-Card:   charged at this moment (capture) — only when a video is delivered
-Family: email with private video link (download button; video auto-deleted 30 days after delivery)
-Coach:  one-time Stripe Connect onboarding → automatic transfer
-No video in 5 days / coach declines → hold released: never charged, $0 Stripe fee
+Parent:  landing page → pick any coach (or enter their email) → choose ✍️ written $20 · 🎙️ voice note $35 · 🎥 video $50
+         → Stripe Checkout (card HOLD only)
+Coach:   email arrives with the athlete, film, what they earn and a fill-in template
+         → hits REPLY in their own inbox (or attaches a voice memo / taps Record for video)
+App:     receives the reply at a private per-request address → checks it → charges the card
+Parent:  gets the reply in their inbox ("Level: Strong D2…") + a text → can forward it, rate it, ask another coach
+Coach:   paid via Stripe (80%). No reply in 5 days → hold released, parent offered another coach in one tap.
 ```
 
 ## Try it in 60 seconds (no credentials)
@@ -34,7 +33,7 @@ Demo mode refuses to start on a Vercel production deployment.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Local dev server |
-| `npm test` | 79 unit/integration tests for money + state logic (Vitest) |
+| `npm test` | 92 unit/integration tests for money + state logic (Vitest) |
 | `npm run typecheck` | TypeScript |
 | `npm run build` | Production build |
 

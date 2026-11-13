@@ -23,6 +23,7 @@ export function makeDeps() {
   deps.store.settings.require_payouts_before_booking = false;
   deps.store.settings.price_tiers_cents = [3000, 4000, 5000];
   deps.store.settings.commission_bps = 0;
+  deps.store.settings.format_prices = { written: 2000, voice: 3500, video: 4000 };
   const advance = (hours: number) => { now = new Date(now.getTime() + hours * 3_600_000); };
   return { deps: deps as Deps & typeof deps, advance };
 }
@@ -66,6 +67,8 @@ export function input(over: Partial<RequestInput> = {}): RequestInput {
     utmSource: null,
     utmCampaign: null,
     fromToken: null,
+    format: "video",
+    purchaserPhone: null,
     ...over,
   };
 }

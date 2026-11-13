@@ -46,8 +46,8 @@ export default async function RequestPage({ params, searchParams }: P) {
   return (
     <div className="container-page max-w-5xl py-8 sm:py-12">
       <Link href={`/coaches/${coach.slug}`} className="text-sm font-medium text-muted hover:text-navy">← {coach.full_name}</Link>
-      <h1 className="mt-3 text-3xl font-bold tracking-tight">Request your evaluation</h1>
-      <p className="mt-1 text-muted">Takes about a minute. No account needed.</p>
+      <h1 className="mt-3 text-3xl font-bold tracking-tight">Ask {coach.full_name.split(" ")[0]} for feedback</h1>
+      <p className="mt-1 text-muted">About a minute. The reply comes to your inbox — no account, no app.</p>
       {original && <div className="mt-4"><Notice tone="success" title="Second opinion">{original.athlete_name}&apos;s details are already filled in — just check and continue.</Notice></div>}
       {sp.cancelled && <div className="mt-4"><Notice tone="warn">Checkout was cancelled — you haven&apos;t been charged. Your details are below whenever you&apos;re ready.</Notice></div>}
 
@@ -60,6 +60,8 @@ export default async function RequestPage({ params, searchParams }: P) {
             priceLabel={money(resolvePrice(coach, settings) ?? coach.price_cents)}
             offerTiers={familyChoosesOffer(coach, settings) ? settings.price_tiers_cents : undefined}
             joined={availabilityLabel(coach, settings) === "joined"}
+            formatPrices={settings.format_prices}
+            defaultFormat={sp.format === "voice" || sp.format === "video" || sp.format === "written" ? sp.format : undefined}
             deadlineDays={settings.deadline_days}
             utmSource={sp.utm_source}
             utmCampaign={sp.utm_campaign}
@@ -78,9 +80,11 @@ export default async function RequestPage({ params, searchParams }: P) {
             </div>
             <div className="mt-3">{availabilityLabel(coach, settings) === "joined" ? <JoinedBadge /> : <InviteBadge />}</div>
             <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
-              <div className="flex justify-between"><dt className="text-muted">30–60s video evaluation</dt><dd className="font-semibold">{familyChoosesOffer(coach, settings) ? "Your offer" : money(resolvePrice(coach, settings) ?? coach.price_cents)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Delivery</dt><dd className="font-semibold">Within {settings.deadline_days} days</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Charged</dt><dd className="font-semibold">Only if delivered</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Written take</dt><dd className="font-semibold">{money(settings.format_prices.written)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Voice note</dt><dd className="font-semibold">{money(settings.format_prices.voice)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Video breakdown</dt><dd className="font-semibold">{money(settings.format_prices.video)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Reply by</dt><dd className="font-semibold">Within {settings.deadline_days} days</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Charged</dt><dd className="font-semibold">Only if they reply</dd></div>
             </dl>
           </div>
         </aside>

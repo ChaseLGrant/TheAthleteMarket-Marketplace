@@ -87,7 +87,7 @@ export default async function CoachesPage({ searchParams }: { searchParams: SP }
 
       {items.length ? (
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map(({ coach, availability }) => <CoachCard key={coach.id} coach={coach} availability={availability} tiers={settings.price_tiers_cents} query={cardQuery} />)}
+          {items.map(({ coach, availability }) => <CoachCard key={coach.id} coach={coach} availability={availability} tiers={settings.price_tiers_cents} fromPrice={Math.min(...Object.values(settings.format_prices))} query={cardQuery} />)}
         </div>
       ) : (
         <div className="card mt-3 p-10 text-center">

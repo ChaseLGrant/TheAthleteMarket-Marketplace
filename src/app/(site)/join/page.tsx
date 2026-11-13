@@ -16,7 +16,7 @@ export default function Join() {
         <p className="mt-3 text-[15px] text-muted">For college assistants and grad assistants, former college coaches, independent evaluators and professional players.</p>
         <ul className="mt-6 space-y-4 text-[15px] leading-relaxed text-muted">
           <li><strong className="text-navy">Requests come to your inbox.</strong> Each email has the athlete, the film and what you&apos;ll earn.</li>
-          <li><strong className="text-navy">Record 30–60 seconds in your browser.</strong> No app, no account, no password.</li>
+          <li><strong className="text-navy">Just hit Reply.</strong> A written take ($16), a voice memo ($28) or a short video ($40) — about 2 minutes. No app, no login.</li>
           <li><strong className="text-navy">Paid automatically via Stripe</strong> after you deliver. You receive $40 for every $50 evaluation.</li>
           <li><strong className="text-navy">Always optional.</strong> Decline anything with one tap; the family is never charged.</li>
         </ul>

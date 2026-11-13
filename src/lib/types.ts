@@ -1,3 +1,6 @@
+export type EvalFormat = "written" | "voice" | "video";
+export const FORMAT_LABEL: Record<EvalFormat, string> = { written: "Written take", voice: "Voice note", video: "Video breakdown" };
+
 export type ListingType = "directory" | "participating";
 export type CoachKind = "active_college" | "former_college" | "independent" | "pro_player";
 export type VerificationStatus = "unverified" | "pending" | "verified" | "rejected";
@@ -27,6 +30,7 @@ export interface Settings {
   allow_active_college_coaches: boolean;
   retention_days: number;
   video_retention_days: number;
+  format_prices: Record<EvalFormat, number>;
   show_directory_listings: boolean;
   require_payouts_before_booking: boolean;
 }
@@ -156,6 +160,14 @@ export interface EvalRequest {
   film_issue_at: string | null;
   film_issue_note: string | null;
   parent_request_id: string | null;
+  format: EvalFormat;
+  level_read: string | null;
+  response_text: string | null;
+  response_kind: "written" | "voice" | "video" | "link" | null;
+  response_link: string | null;
+  response_from: string | null;
+  purchaser_phone: string | null;
+  purchaser_sms_opt_in_at: string | null;
   video_path: string | null;
   video_mime: string | null;
   video_size_bytes: number | null;

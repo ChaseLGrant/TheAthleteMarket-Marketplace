@@ -14,8 +14,13 @@ export default async function Settings() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
       <AdminForm action={saveSettings} className="card p-5">
         <h1 className="text-xl font-bold">Pricing & operations</h1>
-        <div><label className="label" htmlFor="tiers">Price tiers (USD, comma separated)</label>
-          <input id="tiers" name="tiers" className="field" defaultValue={s.price_tiers_cents.map((c) => c / 100).join(", ")} /></div>
+        <input type="hidden" name="tiers" value={s.price_tiers_cents.map((c) => c / 100).join(",")} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {(["written", "voice", "video"] as const).map((k) => (
+            <div key={k}><label className="label" htmlFor={`price_${k}`}>{k === "written" ? "✍️ Written take" : k === "voice" ? "🎙️ Voice note" : "🎥 Video"} ($)</label>
+              <input id={`price_${k}`} name={`price_${k}`} type="number" min={5} max={1000} step={1} className="field" defaultValue={s.format_prices[k] / 100} /></div>
+          ))}
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><label className="label" htmlFor="commission_pct">Platform commission %</label>
             <input id="commission_pct" name="commission_pct" type="number" min={0} max={50} step={0.5} className="field" defaultValue={s.commission_bps / 100} />
@@ -38,7 +43,7 @@ export default async function Settings() {
         <div className="rounded-xl bg-surface p-4 text-sm">
           <p className="font-semibold">Unit economics at current settings</p>
           <table className="mt-2 w-full text-left"><thead className="text-xs text-muted"><tr><th>Price</th><th>Coach gets</th><th>Commission</th><th>Est. Stripe fee</th><th>Platform net</th></tr></thead>
-            <tbody>{s.price_tiers_cents.map((p) => { const b = priceBreakdown(p, s); return (
+            <tbody>{[s.format_prices.written, s.format_prices.voice, s.format_prices.video].map((p) => { const b = priceBreakdown(p, s); return (
               <tr key={p}><td>{money(p)}</td><td>{money(b.coach_payout_cents)}</td><td>{money(b.platform_fee_cents)}</td><td>{money(b.estimated_stripe_fee_cents)}</td>
                 <td className={b.estimated_platform_net_cents < 0 ? "text-danger" : "text-success"}>{money(b.estimated_platform_net_cents)}</td></tr>); })}</tbody></table>
           <p className="mt-2 text-xs text-muted">Cards are only held at checkout and charged on delivery, so declined/expired requests cost $0 in Stripe fees. Only admin refunds of already-charged payments lose the fee.</p>

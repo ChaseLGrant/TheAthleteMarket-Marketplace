@@ -43,6 +43,9 @@ export const requestSchema = z
     utmCampaign: optionalText(60),
     fromToken: optionalText(200), // "second opinion" link from a delivered evaluation
     offerCents: z.coerce.number().int().positive().optional(), // family's offer when the coach hasn't set a price
+    format: z.enum(["written", "voice", "video"]).default("video"),
+    purchaserPhone: z.string().trim().max(30).optional().transform((v) => (v ? v : null)),
+    parentSmsConsent: z.string().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.athleteIsMinor === "yes" && v.relationship !== "parent_guardian") {

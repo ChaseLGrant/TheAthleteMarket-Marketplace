@@ -106,6 +106,7 @@ export class MemoryStore implements Store {
       paid_out_at: null, coach_attested_at: null, last_reminder_at: null, onboarding_email_sent_at: null,
       purged_at: null, video_deleted_at: null, takeaway_strength: null, takeaway_improve: null, takeaway_next: null,
       rating: null, would_buy_again: null, rating_comment: null, rated_at: null, film_issue_at: null, film_issue_note: null,
+      level_read: null, response_text: null, response_kind: null, response_link: null, response_from: null,
       video_path: null, video_mime: null, video_size_bytes: null, video_duration_seconds: null,
     };
     this.requests.set(row.id, row);
@@ -210,6 +211,17 @@ export class MemoryStore implements Store {
     this.spend.unshift({ ...r, id: this.seq++ });
   }
 
+  inbound = new Map<string, { request_id: string | null; from_email: string | null; outcome: string }>();
+  async claimInbound(id: string, requestId: string | null, fromEmail: string | null) {
+    const prev = this.inbound.get(id);
+    if (prev && prev.outcome !== "error") return false;
+    this.inbound.set(id, { request_id: requestId, from_email: fromEmail, outcome: "processing" });
+    return true;
+  }
+  async setInboundOutcome(id: string, outcome: string) {
+    const r = this.inbound.get(id);
+    if (r) r.outcome = outcome;
+  }
   async rateLimit(key: string, windowSeconds: number, max: number) {
     const now = Date.now();
     const cur = this.limits.get(key);

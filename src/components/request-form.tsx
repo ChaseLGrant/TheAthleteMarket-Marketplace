@@ -19,7 +19,16 @@ interface Props {
   offerTiers?: number[];
   /** Coach has joined (vs. we'll email them the request). */
   joined?: boolean;
+  /** Price per reply format, in cents. */
+  formatPrices: { written: number; voice: number; video: number };
+  defaultFormat?: "written" | "voice" | "video";
 }
+
+const FORMATS = [
+  { key: "written", icon: "✍️", title: "Written take", sub: "Level read + strengths, fixes, next step" },
+  { key: "voice", icon: "🎙️", title: "Voice note", sub: "1–2 min, in the coach's own voice" },
+  { key: "video", icon: "🎥", title: "Video breakdown", sub: "30–60 sec personal video" },
+] as const;
 
 const thisYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 9 }, (_, i) => thisYear + i - 1);
@@ -29,9 +38,11 @@ export function RequestForm(p: Props) {
   const v = state.values ?? p.prefill ?? {};
   const [film, setFilm] = useState(v.filmUrl ?? "");
   const tiers = p.offerTiers ?? [];
+  const [format, setFormat] = useState<"written" | "voice" | "video">((v.format as "written") ?? p.defaultFormat ?? "written");
+  const [phone, setPhone] = useState(v.purchaserPhone ?? "");
   const [offer, setOffer] = useState<number>(Number(v.offerCents) || tiers[Math.floor(tiers.length / 2)] || 0);
   const dollars = (c: number) => "$" + c / 100;
-  const priceText = tiers.length ? dollars(offer) : p.priceLabel;
+  const priceText = dollars(p.formatPrices[format]);
   const err = state.fields ?? {};
   const [minor, setMinor] = useState<"yes" | "no">((v.athleteIsMinor as "yes" | "no") ?? "yes");
   const [rel, setRel] = useState(v.relationship ?? "parent_guardian");
@@ -45,7 +56,7 @@ export function RequestForm(p: Props) {
       <input type="hidden" name="utmSource" value={p.utmSource ?? ""} />
       <input type="hidden" name="utmCampaign" value={p.utmCampaign ?? ""} />
       <input type="hidden" name="fromToken" value={p.fromToken ?? ""} />
-      {tiers.length > 0 && <input type="hidden" name="offerCents" value={offer} />}
+      <input type="hidden" name="format" value={format} />
       <div className="hidden" aria-hidden>
         <label>Company <input name="company" tabIndex={-1} autoComplete="off" /></label>
       </div>
@@ -55,6 +66,24 @@ export function RequestForm(p: Props) {
           {state.error}
         </div>
       )}
+
+      <fieldset className="space-y-3">
+        <legend className="text-lg font-semibold">What would you like from Coach {p.coachFirstName}?</legend>
+        <div className="grid grid-cols-1 gap-2">
+          {FORMATS.map((f) => (
+            <label key={f.key} className={cx("flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition", format === f.key ? "border-blue bg-blue-50 ring-2 ring-blue/20" : "border-line hover:bg-surface")}>
+              <input type="radio" name="_format" checked={format === f.key} onChange={() => setFormat(f.key)} className="sr-only" />
+              <span aria-hidden className="text-2xl">{f.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-navy">{f.title}</span>
+                <span className="block text-sm text-muted">{f.sub}</span>
+              </span>
+              <span className="text-lg font-bold text-navy">{dollars(p.formatPrices[f.key])}</span>
+            </label>
+          ))}
+        </div>
+        <p className="hint">Every reply includes the coach&apos;s read on what level they see your athlete at.</p>
+      </fieldset>
 
       <fieldset className="space-y-4">
         <legend className="text-lg font-semibold">The athlete</legend>
@@ -106,7 +135,17 @@ export function RequestForm(p: Props) {
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={effectiveRel === "athlete_adult" ? "Your name" : "Parent/guardian name"} name="purchaserName" error={err.purchaserName} defaultValue={v.purchaserName} autoComplete="name" required />
-          <Field label="Email" name="purchaserEmail" type="email" inputMode="email" autoComplete="email" hint="We'll send the private video link here." error={err.purchaserEmail} defaultValue={v.purchaserEmail} required />
+          <Field label="Email" name="purchaserEmail" type="email" inputMode="email" autoComplete="email" hint="We'll send the coach's reply here." error={err.purchaserEmail} defaultValue={v.purchaserEmail} required />
+        </div>
+        <div>
+          <label htmlFor="purchaserPhone" className="label">Mobile (optional) — we&apos;ll text you when the coach replies</label>
+          <input id="purchaserPhone" name="purchaserPhone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" className="field" />
+          {phone.trim() && (
+            <label className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-muted">
+              <input type="checkbox" name="parentSmsConsent" defaultChecked className="mt-0.5 h-4 w-4 shrink-0 accent-blue" />
+              <span>Text me updates about this request. Msg &amp; data rates may apply. Reply STOP to opt out.</span>
+            </label>
+          )}
         </div>
         {effectiveRel === "parent_guardian" && (
           <Field label="Athlete's email (optional)" name="athleteEmail" type="email" inputMode="email" error={err.athleteEmail} defaultValue={v.athleteEmail} hint="Only used for this request. Never shared." />
@@ -134,20 +173,7 @@ export function RequestForm(p: Props) {
         )}
       </div>
 
-      {tiers.length > 0 && (
-        <fieldset className="space-y-3">
-          <legend className="text-lg font-semibold">Your offer to Coach {p.coachFirstName}</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {tiers.map((t) => (
-              <label key={t} className={cx("flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-xl border text-lg font-bold transition", offer === t ? "border-blue bg-blue-50 text-blue" : "border-line text-navy hover:bg-surface")}>
-                <input type="radio" name="_offer" checked={offer === t} onChange={() => setOffer(t)} className="sr-only" />
-                {dollars(t)}
-              </label>
-            ))}
-          </div>
-          <p className="hint">The coach sees your offer before deciding. It&apos;s only charged if they deliver.</p>
-        </fieldset>
-      )}
+
 
       <fieldset className="space-y-3 rounded-2xl bg-surface p-4">
         {minor === "yes" && (
@@ -168,8 +194,8 @@ export function RequestForm(p: Props) {
           {pending ? "Opening secure checkout…" : `Continue to secure checkout · ${priceText}`}
         </button>
         <p className="text-center text-xs leading-relaxed text-muted">
-          Secure checkout by Stripe. We place a hold on your card now and <strong>only charge it when your video is delivered</strong>.
-          {p.joined ? "" : ` We'll email Coach ${p.coachFirstName} your request right away.`} If {p.coachFirstName} declines or doesn&apos;t deliver within {p.deadlineDays} days, the hold is released and you&apos;re never charged.
+          Secure checkout by Stripe. We place a hold on your card now and <strong>only charge it when the coach replies</strong>.
+          {p.joined ? "" : ` We'll email Coach ${p.coachFirstName} your request right away.`} The reply comes straight to your inbox. No reply within {p.deadlineDays} days? The hold is released and you&apos;re never charged.
         </p>
       </div>
     </form>

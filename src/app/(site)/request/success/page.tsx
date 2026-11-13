@@ -10,13 +10,13 @@ export default async function Success({ searchParams }: { searchParams: Promise<
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-50 text-3xl text-success">✓</div>
       <h1 className="mt-5 text-3xl font-bold tracking-tight">You&apos;re all set</h1>
       <p className="mt-3 text-[16px] leading-relaxed text-muted">
-        Your card is authorized{ref && <> for <strong className="text-navy">{ref.replace(/[^A-Z0-9-]/g, "")}</strong></>} — you&apos;ll only be charged when your video is delivered. We&apos;re emailing your coach now, and
+        Your card is authorized{ref && <> for <strong className="text-navy">{ref.replace(/[^A-Z0-9-]/g, "")}</strong></>} — you&apos;re only charged if the coach replies. We&apos;re emailing the coach now, and
         a receipt is on its way to you.
       </p>
       <ol className="card mt-8 space-y-4 p-6 text-left text-sm">
-        <li><strong>Now</strong> — your coach gets your film and details.</li>
-        <li><strong>Within 5 days</strong> — we email you a private link to their video, and only then charge your card.</li>
-        <li><strong>If they decline or run out of time</strong> — the hold is released. You&apos;re never charged.</li>
+        <li><strong>Now</strong> — the coach gets your film and details by email.</li>
+        <li><strong>When they reply</strong> — it lands in your inbox (and we text you if you added your number). Only then is your card charged.</li>
+        <li><strong>No reply in 5 days?</strong> — the hold is released and we&apos;ll help you ask another coach in one tap.</li>
       </ol>
       <Link href="/coaches" className="btn-ghost mt-8">Browse more coaches</Link>
     </div>

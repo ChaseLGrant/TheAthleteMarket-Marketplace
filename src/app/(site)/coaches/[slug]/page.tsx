@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar, InviteBadge, JoinedBadge, Notice, PriceLabel, Stars } from "@/components/ui";
 import { availabilityLabel, familyChoosesOffer } from "@/lib/compliance";
 import { getDeps, isBot } from "@/lib/server";
+import { money } from "@/lib/format";
 import { deliveryBadge } from "@/lib/services/coach-stats";
 
 export const dynamic = "force-dynamic";
@@ -74,8 +75,8 @@ export default async function CoachPage({ params, searchParams }: P) {
           {status === "invite" && (
             <div className="mt-6">
               <Notice tone="info" title={`${first} hasn't joined The Athlete Market yet`}>
-                That&apos;s okay — we&apos;ll email {first} your request and your offer, and they choose whether to take it. If they don&apos;t
-                deliver within {settings.deadline_days} days, your card is never charged. This listing doesn&apos;t mean the coach or their school is
+                That&apos;s okay — we&apos;ll email {first} your request, and they can reply right from their inbox. If they don&apos;t
+                reply within {settings.deadline_days} days, your card is never charged. This listing doesn&apos;t mean the coach or their school is
                 affiliated with or endorses The Athlete Market.
               </Notice>
             </div>
@@ -85,14 +86,15 @@ export default async function CoachPage({ params, searchParams }: P) {
         <aside className="md:sticky md:top-24 md:self-start">
           {status !== "unavailable" ? (
             <div className="card p-6">
-              <p className="text-sm text-muted">Personal video evaluation</p>
-              <p className="mt-1 text-3xl font-bold tracking-tight"><PriceLabel coach={coach} tiers={settings.price_tiers_cents} /></p>
+              <p className="text-sm text-muted">Written take, voice note or video</p>
+              <p className="mt-1 text-3xl font-bold tracking-tight"><PriceLabel coach={coach} tiers={settings.price_tiers_cents} from={Math.min(...Object.values(settings.format_prices))} /></p>
               {familyChoosesOffer(coach, settings) && <p className="mt-1 text-xs text-muted">You choose your offer. {first} sees it before deciding.</p>}
               <ul className="mt-4 space-y-2 text-sm text-navy">
-                <li>🎥 30–60 second personal video</li>
-                <li>⏱ Within {settings.deadline_days} days</li>
-                <li>💳 Card charged only when delivered</li>
-                <li>🔒 Private link — no account needed</li>
+                <li>✍️ Written take — {money(settings.format_prices.written)}</li>
+                <li>🎙️ Voice note — {money(settings.format_prices.voice)}</li>
+                <li>🎥 Video breakdown — {money(settings.format_prices.video)}</li>
+                <li>📬 Reply straight to your inbox within {settings.deadline_days} days</li>
+                <li>💳 Charged only if {first} replies</li>
               </ul>
               <Link href={`/coaches/${coach.slug}/request${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-primary mt-5 w-full">
                 Request {first}

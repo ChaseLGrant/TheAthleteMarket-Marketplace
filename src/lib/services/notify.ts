@@ -19,6 +19,7 @@ export async function sendEmail(
     requestId?: string | null;
     coachId?: string | null;
     marketing?: boolean; // coach invitations/reminders: suppression + List-Unsubscribe apply
+    replyTo?: string;
   },
 ): Promise<"sent" | "suppressed"> {
   const base = {
@@ -46,6 +47,7 @@ export async function sendEmail(
       text: a.rendered.text,
       idempotencyKey: a.idempotencyKey,
       headers,
+      replyTo: a.replyTo,
     });
     await deps.store.logEmail({ ...base, provider_id: id, status: "sent", error: null });
     return "sent";

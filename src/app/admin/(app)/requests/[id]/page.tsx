@@ -57,6 +57,9 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
             <dt className="text-muted">UTM</dt><dd>{r.utm_source ?? "—"} / {r.utm_campaign ?? "—"}</dd>
             <dt className="text-muted">Second opinion of</dt><dd>{r.parent_request_id ? <Link className="text-blue" href={`/admin/requests/${r.parent_request_id}`}>original request</Link> : "—"}</dd>
             <dt className="text-muted">Film issue</dt><dd>{r.film_issue_at ? `Coach reported ${dateTime(r.film_issue_at)}${r.film_issue_note ? `: “${r.film_issue_note}”` : ""} — waiting for family` : "—"}</dd>
+            <dt className="text-muted">Format</dt><dd>{r.format}{r.response_kind ? ` → replied with ${r.response_kind}` : ""}{r.response_from ? ` (from ${r.response_from})` : ""}</dd>
+            <dt className="text-muted">Level read</dt><dd>{r.level_read ?? "—"}</dd>
+            <dt className="text-muted">Parent texts</dt><dd>{r.purchaser_sms_opt_in_at ? r.purchaser_phone : "—"}</dd>
             <dt className="text-muted">Takeaways</dt><dd>{[r.takeaway_strength && `✓ ${r.takeaway_strength}`, r.takeaway_improve && `↗ ${r.takeaway_improve}`, r.takeaway_next && `→ ${r.takeaway_next}`].filter(Boolean).join(" · ") || "—"}</dd>
             <dt className="text-muted">Family rating</dt><dd>{r.rating ? `${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)} · would buy again: ${r.would_buy_again == null ? "—" : r.would_buy_again ? "yes" : "no"}${r.rating_comment ? ` · “${r.rating_comment}”` : ""}` : "—"}</dd>
           </dl>
@@ -79,7 +82,17 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
       </div>
 
       {r.video_deleted_at && <p className="rounded-xl bg-surface px-4 py-3 text-sm text-muted">Video auto-deleted {dateTime(r.video_deleted_at)} (retention). Delivery record kept: {r.video_size_bytes ? `${(r.video_size_bytes / 1_048_576).toFixed(1)} MB` : ""}, {r.video_duration_seconds ?? "?"}s, viewed {r.video_view_count}×.</p>}
-      {videoUrl && (
+      {(r.response_text || r.response_link) && (
+        <section className="card p-5">
+          <h2 className="font-semibold">Coach&apos;s reply</h2>
+          {r.response_text && <p className="mt-2 whitespace-pre-line text-sm">{r.response_text}</p>}
+          {r.response_link && <a className="mt-2 block break-all text-sm text-blue" href={r.response_link} target="_blank" rel="noreferrer">{r.response_link}</a>}
+        </section>
+      )}
+      {videoUrl && (r.video_mime ?? "").startsWith("audio/") && (
+        <section className="card p-5"><h2 className="font-semibold">Voice note</h2><audio src={videoUrl} controls className="mt-3 w-full" /></section>
+      )}
+      {videoUrl && !(r.video_mime ?? "").startsWith("audio/") && (
         <section className="card p-5">
           <h2 className="font-semibold">Video</h2>
           <p className="text-xs text-muted">{r.video_mime} · {r.video_size_bytes ? `${(r.video_size_bytes / 1_048_576).toFixed(1)} MB` : ""} · {r.video_duration_seconds ?? "?"}s · viewed {r.video_view_count}×</p>

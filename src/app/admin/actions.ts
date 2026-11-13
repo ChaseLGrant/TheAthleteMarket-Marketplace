@@ -234,6 +234,11 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
     if (!(pct >= 0 && pct <= 50)) throw new Error("Commission must be 0–50%");
     await deps.store.updateSettings({
       price_tiers_cents: [...new Set(tiers)].sort((a, b) => a - b),
+      format_prices: Object.fromEntries((["written", "voice", "video"] as const).map((k) => {
+        const v = Math.round(Number(fd.get(`price_${k}`)) * 100);
+        if (!(v >= 500 && v <= 100_000)) throw new Error(`Enter a price between $5 and $1,000 for ${k}`);
+        return [k, v];
+      })) as { written: number; voice: number; video: number },
       commission_bps: Math.round(pct * 100),
       deadline_days: Math.min(6, Math.max(1, Number(fd.get("deadline_days")) || 5)), // card holds expire after ~5–7 days
       max_open_requests_per_coach: Math.min(200, Math.max(1, Number(fd.get("max_open")) || 15)),

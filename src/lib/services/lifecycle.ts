@@ -10,6 +10,8 @@ import {
 } from "../email/templates";
 import { log } from "../log";
 import { priceBreakdown } from "../pricing";
+import { toE164 } from "../phone";
+import { FORMAT_LABEL } from "../types";
 import { videoAvailableUntil } from "../retention";
 import { sourcesFor } from "../state-machine";
 import { randomRef } from "../tokens";
@@ -19,6 +21,7 @@ import { adminRequestUrl, coachDeclineUrl, coachReviewUrl, deliveryUrl, hubUrl, 
 import { alertAdmin, sendEmail, sendSms, textAdmin } from "./notify";
 import { sms as smsText } from "../email/templates";
 import { tokenId, verifyToken } from "../tokens";
+import { mailtoReply, replyAddress, replyTemplate, textParent } from "./email-native";
 
 export class UserFacingError extends Error {
   constructor(message: string, public code = "bad_request") {
@@ -68,8 +71,11 @@ export async function createRequestAndCheckout(
   if ((await store.countOpenRequestsForCoach(coach.id)) >= settings.max_open_requests_per_coach)
     throw new UserFacingError("This coach is at capacity right now. Please choose another coach or try again in a few days.", "capacity");
 
-  const price = resolvePrice(coach, settings, input.offerCents ?? null);
+  // Price is set by the format the family picks (written / voice / video); legacy offer pricing as fallback.
+  const format = input.format ?? "video";
+  const price = settings.format_prices?.[format] ?? resolvePrice(coach, settings, input.offerCents ?? null);
   if (!price) throw new UserFacingError("Please choose how much to offer the coach.", "bad_offer");
+  const phone = toE164(input.purchaserPhone);
   const pb = priceBreakdown(price, settings);
   // "Second opinion" purchases link back to the original request (for repeat-purchase analytics).
   let parentRequestId: string | null = null;
@@ -109,6 +115,9 @@ export async function createRequestAndCheckout(
         utm_source: input.utmSource,
         utm_campaign: input.utmCampaign,
         parent_request_id: parentRequestId,
+        format,
+        purchaser_phone: phone,
+        purchaser_sms_opt_in_at: phone && input.parentSmsConsent === "on" ? iso(now) : null,
       });
     } catch (e) {
       if (i === 2 || !/duplicate|unique/i.test(errMsg(e))) throw e; // ref collision → retry
@@ -124,8 +133,8 @@ export async function createRequestAndCheckout(
     coachId: coach.id,
     amountCents: pb.price_cents,
     currency: "usd",
-    productName: `Video evaluation from ${coach.full_name}`,
-    description: `30–60 second personal video feedback on ${input.athleteName}'s film. Charged only when delivered (within ${settings.deadline_days} days); otherwise the card hold is released.`,
+    productName: `${FORMAT_LABEL[format]} from ${coach.full_name}`,
+    description: `A personal ${FORMAT_LABEL[format].toLowerCase()} on ${input.athleteName}'s film. Charged only if the coach replies (within ${settings.deadline_days} days); otherwise the card hold is released.`,
     customerEmail: input.purchaserEmail,
     successUrl: `${site}/request/success?ref=${req!.ref}`,
     cancelUrl: `${site}/coaches/${coach.slug}/request?cancelled=1`,
@@ -177,6 +186,7 @@ export async function handleCheckoutPaid(
       await deps.store.track("paid", paid.coach_id, paid.id).catch(() => {});
       const c = await deps.store.getCoach(paid.coach_id);
       if (c) await textAdmin(deps, smsText.adminNewOrder(paid, c), `admin-order-${paid.id}`);
+      await textParent(deps, paid, "sent");
       if (s.amount_total != null && s.amount_total !== paid.price_cents) {
         await alertAdmin(deps, "Checkout amount mismatch", [`${paid.ref}: expected ${paid.price_cents}, got ${s.amount_total}`], adminRequestUrl(paid.id));
       }
@@ -246,7 +256,10 @@ export async function notifyCoach(deps: Deps, requestId: string) {
         postalAddress: env.postalAddress(),
         hubUrl: hubUrl(coach),
         otherOpen: Math.max(0, (await deps.store.countOpenRequestsForCoach(coach.id)) - 1),
+        mailtoUrl: mailtoReply(req),
+        template: replyTemplate(req.format),
       }),
+      replyTo: replyAddress(req),
       template: "coach_invite",
       idempotencyKey: `coach-invite-${req.id}`,
       requestId: req.id,
@@ -449,6 +462,7 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
   } catch (e) {
     await alertAdmin(deps, "Delivery email failed", [`${r.ref}: ${errMsg(e)}`, "Resend from the admin request page."], adminRequestUrl(r.id));
   }
+  await textParent(deps, r, "replied");
   await attemptPayout(deps, r.id);
   return mustRequest(deps, r.id);
 }
@@ -632,6 +646,7 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
       } catch (e) {
         log("error", "refund email failed", { request_id: req.id, error: errMsg(e) });
       }
+      if (!captured && why !== "admin") await textParent(deps, rotated, "released", secondOpinionUrl(rotated)).catch(() => {});
     }
   } catch (e) {
     await deps.store.casRequest(req.id, { refund_status: ["processing"] }, { refund_status: "failed", last_error: `refund: ${errMsg(e)}` });

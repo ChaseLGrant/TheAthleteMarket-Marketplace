@@ -99,7 +99,7 @@ describe("payment webhook", () => {
     await runCron(deps);
     expect((await deps.store.getRequest(req.id))!.status).toBe("coach_notified");
     await runCron(deps);
-    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && m.subject.startsWith("$40 evaluation request"))).toHaveLength(1);
+    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && m.subject.startsWith("$40 for a video breakdown"))).toHaveLength(1);
   });
 });
 
@@ -191,7 +191,7 @@ describe("fulfillment + payout", () => {
     ]);
     expect(a.status).toBe("fulfilled");
     expect(b.status).toBe("fulfilled");
-    expect(deps.mailer.sent.filter((m) => m.to === "parent@example.com" && /sent .*evaluation/.test(m.subject))).toHaveLength(1);
+    expect(deps.mailer.sent.filter((m) => m.to === "parent@example.com" && /replied/.test(m.subject))).toHaveLength(1);
   });
 });
 
@@ -287,7 +287,7 @@ describe("card hold: charge only on delivery", () => {
     deps.payments.failCapture = true;
     const r = await submitVideo(deps, req, { path: await upload(deps, req.id), durationSeconds: 40, attest: true });
     expect(r.status).toBe("submitted");
-    expect(deps.mailer.sent.some((m) => m.to === "parent@example.com" && /evaluation$/.test(m.subject))).toBe(false);
+    expect(deps.mailer.sent.some((m) => m.to === "parent@example.com" && /replied/.test(m.subject))).toBe(false);
     expect(deps.payments.transfers).toHaveLength(0);
     deps.payments.failCapture = false;
     await runCron(deps);
@@ -346,7 +346,7 @@ describe("video retention", () => {
 
   it("tells the family the deletion date and to download", async () => {
     const { deps } = await delivered();
-    const email = deps.mailer.sent.find((m) => m.to === "parent@example.com" && /evaluation$/.test(m.subject))!;
+    const email = deps.mailer.sent.find((m) => m.to === "parent@example.com" && /replied/.test(m.subject))!;
     expect(email.html).toContain("Download it to keep it");
     expect(email.text).toMatch(/deleted after/);
   });

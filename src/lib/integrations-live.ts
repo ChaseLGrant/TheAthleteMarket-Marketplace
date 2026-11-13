@@ -229,7 +229,7 @@ export class ResendMailer implements Mailer {
         subject: m.subject,
         html: m.html,
         text: m.text,
-        ...(env.emailReplyTo() ? { reply_to: env.emailReplyTo() } : {}),
+        ...(m.replyTo ? { reply_to: m.replyTo } : env.emailReplyTo() ? { reply_to: env.emailReplyTo() } : {}),
         ...(m.headers ? { headers: m.headers } : {}),
       }),
     });

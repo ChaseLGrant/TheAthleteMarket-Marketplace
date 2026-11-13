@@ -58,7 +58,8 @@ export function InviteBadge() {
 
 export type Availability = "joined" | "invite" | "unavailable";
 
-export function PriceLabel({ coach, tiers }: { coach: Pick<Coach, "price_cents">; tiers: number[] }) {
+export function PriceLabel({ coach, tiers, from }: { coach: Pick<Coach, "price_cents">; tiers: number[]; from?: number }) {
+  if (from) return <span className="text-[15px] font-bold text-navy">From {money(from)}</span>;
   if (coach.price_cents && tiers.includes(coach.price_cents)) return <span className="text-[15px] font-bold text-navy">{money(coach.price_cents)}</span>;
   if (tiers.length === 1) return <span className="text-[15px] font-bold text-navy">{money(tiers[0])}</span>;
   return <span className="text-sm font-semibold text-navy">Offer {money(Math.min(...tiers))}–{money(Math.max(...tiers))}</span>;
@@ -89,7 +90,7 @@ export function Stars({ coach }: { coach: Pick<Coach, "rating_sum" | "rating_cou
   );
 }
 
-export function CoachCard({ coach, availability, tiers, query = "" }: { coach: Coach; availability: Availability; tiers: number[]; query?: string }) {
+export function CoachCard({ coach, availability, tiers, query = "", fromPrice }: { coach: Coach; availability: Availability; tiers: number[]; query?: string; fromPrice?: number }) {
   const speed = deliveryBadge(coach);
   return (
     <Link
@@ -122,7 +123,7 @@ export function CoachCard({ coach, availability, tiers, query = "" }: { coach: C
         ) : (
           <>
             {availability === "joined" ? <JoinedBadge /> : <InviteBadge />}
-            <PriceLabel coach={coach} tiers={tiers} />
+            <PriceLabel coach={coach} tiers={tiers} from={fromPrice} />
           </>
         )}
       </div>

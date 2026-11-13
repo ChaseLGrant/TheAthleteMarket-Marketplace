@@ -124,7 +124,7 @@ describe("delivery experience", () => {
   }
   it("written takeaways and a second-opinion link are in the delivery email", async () => {
     const { deps } = await delivered();
-    const email = deps.mailer.sent.find((m) => m.to === "parent@example.com" && /evaluation$/.test(m.subject))!;
+    const email = deps.mailer.sent.find((m) => m.to === "parent@example.com" && /replied/.test(m.subject))!;
     expect(email.html).toContain("Elite first step");
     expect(email.html).toContain("Get a second coach");
   });
@@ -211,7 +211,7 @@ describe("pilot defaults", () => {
     const r = await submitVideo(deps, req, { path: await upload(deps, req.id), durationSeconds: 40, attest: true });
     expect(r.status).toBe("submitted");
     expect(r.payment_captured_at).not.toBeNull();
-    expect(deps.mailer.sent.some((m) => m.to === "parent@example.com" && /evaluation$/.test(m.subject))).toBe(false);
+    expect(deps.mailer.sent.some((m) => m.to === "parent@example.com" && /replied/.test(m.subject))).toBe(false);
   });
   it("declined requests still never charge", async () => {
     const { deps } = makeDeps();
@@ -228,7 +228,8 @@ describe("open marketplace: acquisition loop", () => {
     const { deps } = makeDeps();
     await addCoach(deps, { slug: "dir", email: "dir@school.edu", listing_type: "directory", source: "import", email_confirmed_at: null,
       verification_status: "unverified", eligibility_status: "not_reviewed", price_cents: null });
-    const { requestId } = await createRequestAndCheckout(deps, input({ coachSlug: "dir", offerCents: 5000 }), { ip: "o" });
+    deps.store.settings.format_prices.video = 5000;
+    const { requestId } = await createRequestAndCheckout(deps, input({ coachSlug: "dir" }), { ip: "o" });
     const req = (await deps.store.getRequest(requestId))!;
     expect(req.price_cents).toBe(5000);
     deps.payments.authorize(`pi_demo_${req.id}`);
@@ -236,17 +237,9 @@ describe("open marketplace: acquisition loop", () => {
     await handleCheckoutPaid(deps, { id: "cs", payment_status: "paid", payment_intent: `pi_demo_${req.id}`, client_reference_id: req.id, amount_total: 5000 });
     const mails = deps.mailer.sent.filter((m) => m.to === "dir@school.edu");
     expect(mails).toHaveLength(1);
-    expect(mails[0]!.subject).toMatch(/^\$50 evaluation request/);
+    expect(mails[0]!.subject).toMatch(/^\$50 for a video breakdown/);
     expect(mails[0]!.html).toContain("A family chose you");
     expect(mails[0]!.html).toContain("Claim your free coach profile");
-  });
-  it("coach without a price: the family must pick an offer from the tiers", async () => {
-    const { deps } = makeDeps();
-    await addCoach(deps, { price_cents: null });
-    await expect(createRequestAndCheckout(deps, input(), { ip: "a" })).rejects.toThrow(/offer/);
-    await expect(createRequestAndCheckout(deps, input({ offerCents: 12345 }), { ip: "b" })).rejects.toThrow(/offer/);
-    const ok = await createRequestAndCheckout(deps, input({ offerCents: 3000 }), { ip: "c" });
-    expect((await deps.store.getRequest(ok.requestId))!.price_cents).toBe(3000);
   });
   it("follow-ups: day-1 nudge if unopened, then ~3 days left, then final day — and they stop when the coach responds", async () => {
     const { deps, advance } = makeDeps();
@@ -259,12 +252,12 @@ describe("open marketplace: acquisition loop", () => {
     await runCron(deps);
     advance(48); // ~21h left
     await runCron(deps);
-    const followUps = deps.mailer.sent.filter((m) => m.to === "pat@example.com" && /(still waiting|Reminder)/.test(m.subject));
+    const followUps = deps.mailer.sent.filter((m) => m.to === "pat@example.com" && /(still waiting|days? left)/.test(m.subject));
     expect(followUps).toHaveLength(3);
     await declineRequest(deps, (await deps.store.getRequest(req.id))!, null);
     advance(10);
     await runCron(deps);
-    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && /(still waiting|Reminder)/.test(m.subject))).toHaveLength(3);
+    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && /(still waiting|days? left)/.test(m.subject))).toHaveLength(3);
   });
   it("impostor protection: Stripe-verified name doesn't match → payout held + founder alerted; admin can release", async () => {
     process.env.ADMIN_ALERT_EMAIL = "founder@example.com";

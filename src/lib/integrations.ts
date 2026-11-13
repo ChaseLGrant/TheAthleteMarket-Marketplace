@@ -61,6 +61,8 @@ export interface EmailMessage {
   text: string;
   idempotencyKey?: string;
   headers?: Record<string, string>;
+  /** Per-message Reply-To (e.g. the request's private reply address). */
+  replyTo?: string;
 }
 export interface Mailer {
   send(m: EmailMessage): Promise<{ id: string }>;

@@ -248,6 +248,19 @@ export class SupabaseStore implements Store {
     must(await this.db.from("marketing_spend").insert(r), "spend.insert");
   }
 
+  async claimInbound(id: string, requestId: string | null, fromEmail: string | null) {
+    const r = await this.db.from("inbound_messages").insert({ id, request_id: requestId, from_email: fromEmail, outcome: "processing" });
+    if (!r.error) return true;
+    if (r.error.code === "23505") {
+      // A previous attempt crashed mid-way → allow the provider's retry to reprocess it.
+      const retry = await this.db.from("inbound_messages").update({ outcome: "processing" }).eq("id", id).eq("outcome", "error").select("id");
+      return !retry.error && (retry.data?.length ?? 0) > 0;
+    }
+    throw new Error(`[db] claimInbound: ${r.error.message}`);
+  }
+  async setInboundOutcome(id: string, outcome: string) {
+    must(await this.db.from("inbound_messages").update({ outcome }).eq("id", id), "inbound.outcome");
+  }
   async rateLimit(key: string, windowSeconds: number, max: number) {
     const r = await this.db.rpc("rate_limit_hit", { p_key: key, p_window_seconds: windowSeconds, p_max: max });
     if (r.error) {

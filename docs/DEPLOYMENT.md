@@ -11,6 +11,7 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
 | Supabase | Postgres + private video storage | You already have Pro (daily backups, large uploads) |
 | Stripe | Checkout, refunds, Connect payouts | Pay-as-you-go |
 | Resend | Email to coaches + families | Free tier is capped at 100 emails/day — **use Resend Pro ($20/mo, 50k emails)** before launch, Scale beyond that |
+| Postmark | Receives coaches' email replies | ~$15/mo (inbound included) |
 | Twilio | Text alerts to coaches (+ order alerts to you) | ~$0.01 per text; you already have an approved account |
 
 ## 1. Supabase (inside your existing project — no extra cost)
@@ -86,6 +87,25 @@ Coach emails are the growth engine, so inbox placement matters more than anythin
    "N families waiting — $X"), one-click unsubscribe headers, automatic retry when Resend rate-limits a burst.
 5. **Import clean lists.** Only import coach emails you got from public staff/team pages; remove role addresses
    (`info@`, `athletics@`) and obviously stale entries — bounces are what hurt reputation most.
+
+## 3a-2. Inbound email: coaches reply from their own inbox (Postmark)
+
+Every request gets a private reply address like `r-<id>-<code>@reply.theathletemarket.com`. When a coach hits Reply, the email
+goes to Postmark, which posts it to the app. The app cleans the reply, checks it's a real answer (auto-replies "almost there" if
+not), charges the card, emails the reply to the family and pays the coach. Coaches and families never see each other's addresses.
+
+1. Create a Postmark account → **Servers → your server → Inbound**. (Inbound is included on paid plans, from ~$15/mo.)
+2. **DNS:** add an **MX** record for `reply.theathletemarket.com` → `inbound.postmarkapp.com` (priority 10). Only this subdomain;
+   your main email is untouched.
+3. In Postmark Inbound settings: **Inbound domain** = `reply.theathletemarket.com`, **Webhook URL** =
+   `https://marketplace.theathletemarket.com/api/inbound/postmark?token=YOUR_INBOUND_WEBHOOK_SECRET`.
+   Turn on "Include raw email content" off (not needed). Postmark retries automatically if the app is briefly unavailable.
+4. Vercel env: `INBOUND_EMAIL_DOMAIN=reply.theathletemarket.com`, `INBOUND_WEBHOOK_SECRET=` (random, same as in the URL).
+5. Test: place a $20 test-mode order to yourself as the coach, hit Reply in your real inbox, fill in the template, send —
+   the "family" inbox should receive the reply within a minute.
+
+Attachment limits: voice memos (about 1 MB per minute) always fit. Videos larger than ~25 MB get turned into Drive/iCloud links
+by the coach's mail app — those links are accepted too, and the email also offers a one-tap "Record" page.
 
 ## 3b. Twilio (text alerts)
 

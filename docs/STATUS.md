@@ -4,7 +4,7 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 
 ## Verified in this repo
 
-* **79 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
+* **92 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
   lifecycle against an in-memory database with simulated Stripe and email: duplicate webhooks, concurrent payouts (exactly one
   transfer), late submissions rejected after the deadline, expiry → single refund, decline → single refund, failed refund retried
   by cron, refund blocked after payout, dispute holds payout until won, opt-out refunds open requests, coach capacity, rate limits, and the card-hold model: coach never emailed without a successful
@@ -30,6 +30,8 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 | Stripe manual capture + `capture_before` | Needs Stripe keys | Smoke test §9.3/§9.6/§9.7: payment goes Uncaptured → Succeeded or Canceled |
 | Vercel daily cron | Needs deployment | Check Vercel → Cron Jobs after deploy |
 | Twilio texts | Needs your Twilio keys | Smoke test §9.9 |
+| Postmark inbound (coach email replies) | Needs Postmark + the MX record | Deployment §3a-2 step 5: reply to a real test request from your own inbox |
+| Reply parsing across mail apps | Tested with Gmail/Apple/Outlook-style quoting in unit tests, not live clients | Reply from iPhone Mail, Gmail app, Outlook — check the family email reads cleanly |
 | Film-link check against live YouTube/Vimeo/Drive | This sandbox can't reach those sites; tested with simulated responses | Paste a private YouTube link in the form; it should be flagged before checkout |
 
 ## Known limitations / next steps

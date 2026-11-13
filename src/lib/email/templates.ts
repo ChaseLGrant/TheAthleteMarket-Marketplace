@@ -104,7 +104,7 @@ export function coachWeekly(a: { coach: Coach; count: number; earnedCents: numbe
 
 /** One email per coach when several families are waiting (high volume: never one email per request). */
 export function coachDigest(a: {
-  coach: Coach; items: { req: EvalRequest; url: string }[]; hubUrl: string; unsubscribeUrl: string; postalAddress: string; finalDay: boolean;
+  coach: Coach; items: { req: EvalRequest; url: string; replyUrl?: string }[]; hubUrl: string; unsubscribeUrl: string; postalAddress: string; finalDay: boolean;
 }): Rendered {
   const total = a.items.reduce((s, i) => s + i.req.coach_payout_cents, 0);
   const n = a.items.length;
@@ -113,13 +113,13 @@ export function coachDigest(a: {
     ? `Last day: ${money(total)} waiting from ${n} famil${n === 1 ? "y" : "ies"}`
     : `${n} famil${n === 1 ? "y is" : "ies are"} waiting on you — ${money(total)}`;
   const rows = a.items.map((i) =>
-    `<tr><td style="padding:10px 0;border-bottom:1px solid #EEF1F7;font-size:14px;color:${NAVY};"><strong>${esc(i.req.athlete_name)}</strong><br><span style="color:${MUTED};">${esc(i.req.sport)} · ${esc(i.req.position)} · ${esc(i.req.grad_year)} · by ${esc(dateOnly(i.req.expires_at))}</span></td>` +
-    `<td style="padding:10px 0;border-bottom:1px solid #EEF1F7;text-align:right;white-space:nowrap;"><span style="font-weight:700;color:#0A7A3E;">${money(i.req.coach_payout_cents)}</span><br><a href="${esc(i.url)}" style="color:${BLUE};font-size:14px;font-weight:600;">Record →</a></td></tr>`).join("");
+    `<tr><td style="padding:10px 0;border-bottom:1px solid #EEF1F7;font-size:14px;color:${NAVY};"><strong>${esc(i.req.athlete_name)}</strong><br><span style="color:${MUTED};">${esc(FORMAT_WORD[i.req.format])} · ${esc(i.req.position)} · ${esc(i.req.grad_year)} · by ${esc(dateOnly(i.req.expires_at))}</span></td>` +
+    `<td style="padding:10px 0;border-bottom:1px solid #EEF1F7;text-align:right;white-space:nowrap;"><span style="font-weight:700;color:#0A7A3E;">${money(i.req.coach_payout_cents)}</span><br><a href="${esc(i.req.format === "video" || !i.replyUrl ? i.url : i.replyUrl)}" style="color:${BLUE};font-size:14px;font-weight:600;">${i.req.format === "video" ? "Record" : "Reply"} →</a></td></tr>`).join("");
   const html = layout({
-    preheader: `${money(total)} in evaluation requests. 30–60 seconds each, right from your phone.`,
+    preheader: `${money(total)} in requests. Reply from your inbox — about 2 minutes each.`,
     heading: a.finalDay ? `Last chance: ${money(total)} is waiting` : `${money(total)} in requests is waiting for you`,
     bodyHtml:
-      p(`${n} famil${n === 1 ? "y has" : "ies have"} asked for your honest feedback. Each one is a <strong>30–60 second video</strong> recorded in your browser — no account, no app.`) +
+      p(`${n} famil${n === 1 ? "y has" : "ies have"} asked for your honest feedback. Tap <strong>Reply</strong> on each one — your email app opens with the template ready. Most take about 2 minutes.`) +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 14px;">${rows}</table>` +
       p(`<span style="font-size:13px;color:${MUTED};">First deadline: ${esc(dateOnly(soonest))}. Anything you don't record is simply released — families are never charged.</span>`),
     cta: { label: "See all requests", url: a.hubUrl },
@@ -133,11 +133,17 @@ export function coachDigest(a: {
 /** Text messages: short, branded, always with opt-out wording. */
 export const sms = {
   coachNewRequest: (req: EvalRequest, url: string) =>
-    `The Athlete Market: ${money(req.coach_payout_cents)} evaluation request — ${req.athlete_name}, ${req.position}, ${req.grad_year}. Record by ${dateOnly(req.expires_at)}: ${url} Reply STOP to opt out.`,
+    `The Athlete Market: ${money(req.coach_payout_cents)} for a ${FORMAT_WORD[req.format]} — ${req.athlete_name}, ${req.position}, ${req.grad_year}. Check your email to reply (by ${dateOnly(req.expires_at)}): ${url} Reply STOP to opt out.`,
+  parentSent: (req: EvalRequest, coachName: string) =>
+    `The Athlete Market: your request went to ${coachName}. We'll text you the moment they reply. You're only charged if they do. Reply STOP to opt out.`,
+  parentReplied: (req: EvalRequest, coachName: string) =>
+    `The Athlete Market: ${coachName} replied about ${req.athlete_name.split(" ")[0]}! Check your email (${req.purchaser_email}).`,
+  parentReleased: (req: EvalRequest, coachName: string, url: string) =>
+    `The Athlete Market: ${coachName} couldn't reply in time — you were NOT charged. Pick another coach (details saved): ${url}`,
   coachReminder: (req: EvalRequest, url: string, daysLeft: number) =>
     `The Athlete Market: ${daysLeft} day${daysLeft === 1 ? "" : "s"} left to record ${req.athlete_name}'s evaluation (${money(req.coach_payout_cents)}): ${url} Reply STOP to opt out.`,
   coachDigest: (n: number, totalCents: number, url: string) =>
-    `The Athlete Market: ${n} families are waiting on your video evaluation — ${money(totalCents)} total. See them: ${url} Reply STOP to opt out.`,
+    `The Athlete Market: ${n} families are waiting on your reply — ${money(totalCents)} total. Check your email or see them: ${url} Reply STOP to opt out.`,
   coachFilmUpdated: (req: EvalRequest, url: string) =>
     `The Athlete Market: ${req.athlete_name}'s family sent a new film link. Record here: ${url}`,
   adminNewOrder: (req: EvalRequest, coach: Coach) =>
@@ -157,65 +163,99 @@ export interface Rendered {
 const NO_PROMISE =
   "This is a paid feedback request only. You are not being asked to recruit, contact, offer, or promise anything to this athlete.";
 
+
+const FORMAT_WORD: Record<EvalRequest["format"], string> = { written: "written take", voice: "voice note", video: "video breakdown" };
+const HOW_TO: Record<EvalRequest["format"], string> = {
+  written: "Just <strong>hit Reply</strong> and fill in the short template below — about 2 minutes. No account, no app.",
+  voice: "<strong>Hit Reply and attach a 1–2 minute voice memo</strong> (iPhone: Voice Memos → ••• → Share → Mail). Add a line or two in the template if you like.",
+  video: "<strong>Tap Record</strong> to film 30–60 seconds right in your browser — or hit Reply and attach a short video or a link.",
+};
+
+function templateBlock(template: string) {
+  return `<pre style="margin:6px 0 16px;padding:14px 16px;background:#F4F6FB;border-radius:12px;font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:${NAVY};white-space:pre-wrap;">${esc(template)}</pre>`;
+}
+
+const GROWTH_FOOTER = `Want feedback from another coach? <a href="https://marketplace.theathletemarket.com" style="color:${BLUE};">Get your own evaluation at theathletemarket.com</a>.`;
+
 export function coachInvite(a: {
   req: EvalRequest; coach: Coach; reviewUrl: string; declineUrl: string; unsubscribeUrl: string;
   postalAddress: string; reminder?: { daysLeft: number; nudge?: boolean }; hubUrl?: string; otherOpen?: number; filmUpdated?: boolean;
+  mailtoUrl?: string; template?: string;
 }): Rendered {
   const { req, coach } = a;
   const pay = money(req.coach_payout_cents);
+  const what = FORMAT_WORD[req.format];
   const deadline = dateOnly(req.expires_at);
   const subject = a.filmUpdated
     ? `Updated film link: ${req.athlete_name} · ${pay}`
     : a.reminder?.nudge
-    ? `${pay} is still waiting for you — ${req.athlete_name}'s evaluation`
+    ? `${pay} is still waiting for you — ${req.athlete_name} (${what})`
     : a.reminder
-    ? `Reminder: ${req.athlete_name}'s evaluation (${pay}) — ${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left`
-    : `${pay} evaluation request: ${req.athlete_name} · ${req.position} · ${req.grad_year}`;
+    ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left: ${pay} for ${req.athlete_name}'s ${what}`
+    : `${pay} for a ${what}: ${req.athlete_name} · ${req.position} · ${req.grad_year}`;
+  const primary = req.format === "video" ? { label: "● Record (60 sec, no login)", url: a.reviewUrl } : a.mailtoUrl ? { label: "Reply now", url: a.mailtoUrl } : { label: "Open request", url: a.reviewUrl };
   const html = layout({
-    preheader: `${req.athlete_name} (${req.grad_year} ${req.position}) asked for a 30–60s video evaluation. You earn ${pay}.`,
-    heading: a.reminder ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left to record` : `Coach ${coach.full_name.split(" ").slice(-1)[0]}, you have a paid evaluation request`,
+    preheader: `${req.athlete_name} (${req.grad_year} ${req.position}) wants your ${what}. You earn ${pay} — reply from this email.`,
+    heading: a.reminder ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left — ${pay} is waiting` : `Coach ${coach.full_name.split(" ").slice(-1)[0]}, a family wants your ${what}`,
     bodyHtml:
       (a.filmUpdated ? p(`<strong>The family sent a new film link</strong> — thanks for flagging it. Everything else is the same.`) : "") +
-      (coach.stripe_transfers_active
-        ? ""
-        : p(`<strong>A family chose you</strong> and is offering <strong>${pay}</strong> for your honest take on their athlete's film. You don't need to sign up for anything.`) +
-          (a.hubUrl ? p(`<span style="font-size:13px;color:${MUTED};">New to The Athlete Market? Families find coaches like you and pay for short video feedback. <a href="${esc(a.hubUrl)}" style="color:${BLUE};">Claim your free coach profile</a> to set your price, add a photo and get paid instantly.</span>`) : "")) +
-      p(`Record a <strong>30–60 second video</strong> right from your phone's browser — no account, no app, no password.`) +
+      (coach.stripe_transfers_active ? "" : p(`<strong>A family chose you</strong> and is paying <strong>${pay}</strong> for your honest take. You don't need to sign up for anything.`)) +
+      p(HOW_TO[req.format]) +
       table([
         row("Athlete", esc(req.athlete_name)),
         row("Sport · Position", `${esc(req.sport)} · ${esc(req.position)}`),
         row("Class of", esc(req.grad_year)),
         row("Highlight film", `<a href="${esc(req.film_url)}" style="color:${BLUE};">Watch film ↗</a>`),
         row("You receive", `<span style="color:#0A7A3E;">${pay}</span>`),
-        row("Respond by", esc(deadline)),
+        row("Reply by", esc(deadline)),
       ]) +
-      p(`<span style="font-size:13px;color:${MUTED};">${esc(NO_PROMISE)} ${coach.stripe_transfers_active
-        ? "Payment is sent automatically via Stripe as soon as your video is delivered."
-        : "After you submit, a quick one-time Stripe setup (about 3 minutes) sends the money to your bank."} If you decline or don't respond by the deadline, the family is simply never charged.</span>`) +
+      (req.message ? p(`<span style="color:${MUTED};">Note from the family: “${esc(req.message)}”</span>`) : "") +
+      (a.template ? p(`<strong>Reply template</strong> — fill it in and send:`) + templateBlock(a.template) : "") +
+      (req.format !== "video" ? p(`<span style="font-size:13px;color:${MUTED};">On a computer and “Reply now” doesn't open anything? <a href="${esc(a.reviewUrl)}" style="color:${BLUE};">Type your reply on the request page</a>.</span>`) : "") +
+      p(`<span style="font-size:13px;color:${MUTED};">${coach.stripe_transfers_active
+        ? "Payment is sent automatically via Stripe as soon as your reply is delivered."
+        : "After you reply, a quick one-time Stripe setup (about 3 minutes) sends the money to your bank."} Not for you? Reply <strong>PASS</strong> — the family is never charged.</span>`) +
+      (!coach.stripe_transfers_active && a.hubUrl ? p(`<span style="font-size:13px;color:${MUTED};">New to The Athlete Market? <a href="${esc(a.hubUrl)}" style="color:${BLUE};">Claim your free coach profile</a> to get paid instantly on every reply.</span>`) : "") +
       (a.otherOpen && a.hubUrl ? p(`You have <strong>${a.otherOpen} other open request${a.otherOpen === 1 ? "" : "s"}</strong>. <a href="${esc(a.hubUrl)}" style="color:${BLUE};">See them all</a>.`) : ""),
-    cta: { label: "Review & Record", url: a.reviewUrl },
-    secondary: { label: "Decline this request", url: a.declineUrl },
-    footerHtml: `You received this because a family requested an evaluation from you on The Athlete Market. Participation is entirely optional.${a.hubUrl ? ` Busy? <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause new requests</a>.` : ""} <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
+    cta: primary,
+    secondary: req.format === "video" && a.mailtoUrl ? { label: "Or reply by email with a video / link", url: a.mailtoUrl } : { label: "Not for me — decline", url: a.declineUrl },
+    footerHtml: `A family requested your feedback through The Athlete Market. Participation is optional — <a href="${esc(a.declineUrl)}" style="color:${MUTED};">decline this request</a>.${a.hubUrl ? ` Busy? <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause new requests</a>.` : ""} <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
     postalAddress: a.postalAddress,
   });
   const text = [
-    a.reminder ? `${a.reminder.daysLeft} day(s) left to record.` : `You have a paid evaluation request.`,
-    ``,
-    `Athlete: ${req.athlete_name}`,
-    `Sport/Position: ${req.sport} / ${req.position}`,
-    `Class of: ${req.grad_year}`,
-    `Film: ${req.film_url}`,
-    `You receive: ${pay}`,
-    `Respond by: ${deadline}`,
-    ``,
-    `Review & Record: ${a.reviewUrl}`,
-    `Decline: ${a.declineUrl}`,
-    ``,
-    NO_PROMISE,
-    `Stop all emails: ${a.unsubscribeUrl}`,
-    a.postalAddress,
-  ].join("\n");
+    subject, "",
+    HOW_TO[req.format].replace(/<[^>]+>/g, ""), "",
+    `Athlete: ${req.athlete_name}`, `Sport/Position: ${req.sport} / ${req.position}`, `Class of: ${req.grad_year}`,
+    `Film: ${req.film_url}`, `You receive: ${pay}`, `Reply by: ${deadline}`, "",
+    ...(a.template ? ["--- Reply template ---", a.template, "----------------------", ""] : []),
+    req.format === "video" ? `Record: ${a.reviewUrl}` : `Or type your reply here: ${a.reviewUrl}`, `Not for you? Reply PASS.`, "",
+    `Stop all emails: ${a.unsubscribeUrl}`, a.postalAddress,
+  ].filter((l) => l !== undefined).join("\n");
   return { subject, html, text };
+}
+
+/** Auto-reply when a coach's reply can't be accepted yet (too short / missing the voice memo or video / closed). */
+export function coachReplyNeedsMore(a: {
+  req: EvalRequest; coach: Coach; kind: "too_short" | "needs_media" | "closed"; recordUrl: string; template: string; postalAddress: string;
+}): Rendered {
+  const { req } = a;
+  const what = FORMAT_WORD[req.format];
+  const body =
+    a.kind === "closed"
+      ? p(`Thanks for replying! This request for ${esc(req.athlete_name)} has already closed, so nothing more is needed — the family wasn't charged.`)
+      : a.kind === "too_short"
+      ? p(`Thanks! Your reply came through but it's a little short for a ${what}. Could you reply once more with a few sentences — the template below makes it quick:`) + templateBlock(a.template)
+      : req.format === "voice"
+      ? p(`Thanks! We didn't find a voice memo attached. Reply once more with a 1–2 minute voice memo (iPhone: Voice Memos → ••• → Share → Mail).`)
+      : p(`Thanks! We didn't find a video attached. <a href="${esc(a.recordUrl)}" style="color:${BLUE};font-weight:600;">Tap here to record 60 seconds in your browser</a>, or reply with a video or a link.`);
+  const html = layout({
+    preheader: a.kind === "closed" ? "This request has closed." : "Almost there — one quick fix.",
+    heading: a.kind === "closed" ? "This request has closed" : "Almost there",
+    bodyHtml: body,
+    footerHtml: `Reference ${esc(req.ref)}.`,
+    postalAddress: a.postalAddress,
+  });
+  return { subject: a.kind === "closed" ? `Closed: ${req.athlete_name}'s request` : `Almost there: ${req.athlete_name}'s ${what}`, html, text: body.replace(/<[^>]+>/g, "") + `\n\n${a.postalAddress}` };
 }
 
 export function purchaserReceipt(a: { req: EvalRequest; coach: Coach; postalAddress: string }): Rendered {
@@ -225,13 +265,13 @@ export function purchaserReceipt(a: { req: EvalRequest; coach: Coach; postalAddr
     preheader: `We've emailed ${coach.full_name}. You're only charged when your video is delivered.`,
     heading: "Your request is on its way",
     bodyHtml:
-      p(`We've emailed <strong>${esc(coach.full_name)}</strong> your request for a 30–60 second video evaluation of ${esc(req.athlete_name)}.`) +
+      p(`We've emailed <strong>${esc(coach.full_name)}</strong> your request for a <strong>${FORMAT_WORD[req.format]}</strong> on ${esc(req.athlete_name)}. You'll get their reply right here in your inbox${req.purchaser_sms_opt_in_at ? " — and a text the moment it arrives" : ""}.`) +
       table([
         row("Reference", esc(req.ref)),
         row("Card hold", `${money(req.price_cents)} <span style="font-weight:400;color:${MUTED};">(charged only on delivery)</span>`),
-        row("Video by", esc(dateOnly(req.expires_at))),
+        row("Reply by", esc(dateOnly(req.expires_at))),
       ]) +
-      p(`<strong>What happens next:</strong> when the coach records, we'll email you a private link to watch it. Your card is <strong>only charged when the video is delivered</strong>. If they decline or don't respond by the deadline, the hold is released and you're never charged — nothing to do.`) +
+      p(`<strong>Guaranteed:</strong> your card is only charged when ${esc(coach.full_name.split(" ")[0])} replies. If they pass or don't reply by the deadline, the hold is released and we'll help you pick another coach in one tap.`) +
       p(`<span style="font-size:13px;color:${MUTED};">An evaluation is one coach's feedback. It is not a recruiting contact, offer, scholarship, admission decision, or roster spot.</span>`),
     footerHtml: `Questions? Just reply to this email and include ${esc(req.ref)}.`,
     postalAddress: a.postalAddress,
@@ -245,20 +285,39 @@ export function purchaserReceipt(a: { req: EvalRequest; coach: Coach; postalAddr
 export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl: string; availableUntil: Date | null; postalAddress: string; secondOpinionUrl?: string }): Rendered {
   const until = a.availableUntil ? dateOnly(a.availableUntil.toISOString()) : null;
   const { req, coach } = a;
-  const subject = `${coach.full_name} sent ${req.athlete_name.split(" ")[0]}'s video evaluation`;
+  const first = req.athlete_name.split(" ")[0];
+  const media = !!req.video_path || !!req.response_link;
+  const mediaWord = req.response_kind === "voice" ? "voice note" : "video";
+  const subject = `${coach.full_name} replied: ${first}'s ${FORMAT_WORD[req.format]}`;
+  const where = [coach.title, coach.school].filter(Boolean).join(", ");
+  const level = req.level_read
+    ? `<div style="margin:0 0 14px;padding:14px 16px;background:#0B1B3F;border-radius:12px;color:#fff;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8FB0FF;">Level ${esc(coach.full_name.split(" ")[0])} sees ${esc(first)} at</div><div style="font-size:20px;font-weight:700;margin-top:4px;">${esc(req.level_read)}</div></div>`
+    : "";
+  const written = req.response_text
+    ? `<div style="margin:0 0 14px;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.response_text)}</div>`
+    : "";
   const html = layout({
-    preheader: "Your private video evaluation is ready to watch.",
-    heading: "Your video evaluation is ready",
+    preheader: req.level_read ? `Level: ${req.level_read}. Read ${coach.full_name}'s full reply.` : `Read ${coach.full_name}'s reply about ${first}.`,
+    heading: `${coach.full_name} replied`,
     bodyHtml:
-      p(`<strong>${esc(coach.full_name)}</strong> recorded a personal evaluation of ${esc(req.athlete_name)}'s film. Tap below to watch it — the link is private to you, so please don't post it publicly.`) +
-      takeawaysHtml(req) +
-      (until ? p(`<strong>Download it to keep it.</strong> For privacy, the video is automatically deleted after <strong>${esc(until)}</strong>. Use the download button on the video page.`) : ""),
-    cta: { label: "Watch the evaluation", url: a.videoUrl },
+      p(`<span style="color:${MUTED};">${esc(where)}</span>`) +
+      level +
+      (req.response_text ? written : takeawaysHtml(req)) +
+      (media ? p(`${esc(coach.full_name.split(" ")[0])} also sent a <strong>${mediaWord}</strong>.${until ? ` Download it to keep it — it's deleted for privacy after ${esc(until)}.` : ""}`) : "") +
+      p(`<span style="font-size:13px;color:${MUTED};">Tip: forward this email to other coaches or your club coach — it's yours to share.</span>`),
+    cta: media ? { label: req.response_kind === "voice" ? "▶ Listen to the voice note" : "▶ Watch the video", url: a.videoUrl } : { label: "Rate this reply", url: a.videoUrl },
     secondary: a.secondOpinionUrl ? { label: "Get a second coach's take →", url: a.secondOpinionUrl } : undefined,
-    footerHtml: `Reference ${esc(req.ref)}. This link is private; anyone with it can watch the video. Reply to this email to have it revoked.`,
+    footerHtml: `Reference ${esc(req.ref)}. ${GROWTH_FOOTER}`,
     postalAddress: a.postalAddress,
   });
-  return { subject, html, text: `${coach.full_name} recorded your evaluation. Watch privately: ${a.videoUrl}${until ? `\n\nDownload it to keep it — the video is automatically deleted after ${until}.` : ""}\n\n${a.postalAddress}` };
+  const text = [
+    `${coach.full_name} replied about ${req.athlete_name}.`, "",
+    ...(req.level_read ? [`Level: ${req.level_read}`, ""] : []),
+    ...(req.response_text ? [req.response_text, ""] : []),
+    media ? `${req.response_kind === "voice" ? "Listen" : "Watch"}: ${a.videoUrl}${until ? ` (download it to keep it — deleted after ${until})` : ""}` : `Rate this reply: ${a.videoUrl}`,
+    "", "Get your own evaluation at theathletemarket.com", a.postalAddress,
+  ].join("\n");
+  return { subject, html, text };
 }
 
 export function purchaserRefunded(a: {
