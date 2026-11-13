@@ -20,6 +20,8 @@ export default function Terms() {
       <p>You confirm you have the right to share the film link and details you provide. Videos are delivered privately for your personal use; please don&apos;t publish them without the Coach&apos;s permission.</p>
       <h2>6. Coaches</h2>
       <p>Coaches must be verified and approved under our Evaluator Eligibility Policy before receiving paid requests, must comply with all rules that apply to them, and are paid via Stripe Connect after delivering a qualifying video and completing Stripe&apos;s identity and payout requirements. Deposit timing is set by Stripe.</p>
+      <h2>6a. Text messages</h2>
+      <p>Coaches may opt in to text alerts about evaluation requests. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to cancel, HELP for help. Carriers are not liable for delayed or undelivered messages.</p>
       <h2>7. Acceptable use</h2>
       <p>No harassment, spam, or attempts to contact Coaches outside the platform to circumvent these terms. We may refuse or cancel any request.</p>
       <h2>8. Liability</h2>

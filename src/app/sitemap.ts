@@ -9,7 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: `${site}${p}`, changeFrequency: "weekly", priority: p === "" ? 1 : 0.6,
   }));
   try {
-    const { coaches } = await (await getDeps()).store.searchCoaches({ availableOnly: true, limit: 60 });
+    const { coaches } = await (await getDeps()).store.searchCoaches({ availableOnly: true, limit: 60, includeDirectory: false });
     return [...base, ...coaches.map((c) => ({ url: `${site}/coaches/${c.slug}`, lastModified: c.updated_at, priority: 0.8 }))];
   } catch {
     return base;

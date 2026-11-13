@@ -41,6 +41,7 @@ export const requestSchema = z
     company: z.string().max(0, "Bot detected").optional(), // honeypot
     utmSource: optionalText(60),
     utmCampaign: optionalText(60),
+    fromToken: optionalText(200), // "second opinion" link from a delivered evaluation
   })
   .superRefine((v, ctx) => {
     if (v.athleteIsMinor === "yes" && v.relationship !== "parent_guardian") {
@@ -65,6 +66,8 @@ export const applicationSchema = z.object({
   credentials: optionalText(300),
   message: optionalText(1000),
   attest: z.literal("on", { message: "Please confirm the statement above" }),
+  phone: z.string().trim().max(30).optional().transform((v) => (v ? v : null)),
+  smsConsent: z.string().optional(),
   company: z.string().max(0).optional(),
 });
 
@@ -73,10 +76,29 @@ export const uploadRequestSchema = z.object({
   size: z.number().int().positive(),
 });
 
+const takeaway = z.string().trim().max(200).optional().transform((v) => (v ? v : null));
 export const submitSchema = z.object({
   path: z.string().max(300),
   durationSeconds: z.number().min(0).max(3600).nullable().optional(),
   attest: z.literal(true, { message: "Please confirm the coach attestation" }),
+  takeaways: z.object({ strength: takeaway, improve: takeaway, next: takeaway }).optional(),
+});
+
+export const introSubmitSchema = z.object({
+  path: z.string().max(300),
+  durationSeconds: z.number().min(0).max(600).nullable().optional(),
+  attest: z.literal(true, { message: "Please confirm" }),
+});
+
+export const ratingSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  wouldBuyAgain: z.boolean().nullable().optional(),
+  comment: z.string().trim().max(500).optional().transform((v) => (v ? v : null)),
+});
+
+export const filmIssueSchema = z.object({ note: z.string().trim().max(300).optional().transform((v) => (v ? v : null)) });
+export const filmFixSchema = z.object({
+  filmUrl: z.string().trim().max(500).refine(isSafeFilmUrl, "Paste a full https:// link to your film"),
 });
 
 export function fieldErrors(err: z.ZodError): Record<string, string> {

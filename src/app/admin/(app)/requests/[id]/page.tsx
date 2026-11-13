@@ -55,6 +55,10 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
             <dt className="text-muted">Purchaser</dt><dd>{r.purchaser_name} ({r.purchaser_relationship.replace("_", " ")})<br />{r.purchaser_email}</dd>
             <dt className="text-muted">Consent</dt><dd>{r.guardian_consent_at ? `Guardian ${dateTime(r.guardian_consent_at)}` : "n/a (adult)"} · Terms {dateTime(r.terms_accepted_at)}</dd>
             <dt className="text-muted">UTM</dt><dd>{r.utm_source ?? "—"} / {r.utm_campaign ?? "—"}</dd>
+            <dt className="text-muted">Second opinion of</dt><dd>{r.parent_request_id ? <Link className="text-blue" href={`/admin/requests/${r.parent_request_id}`}>original request</Link> : "—"}</dd>
+            <dt className="text-muted">Film issue</dt><dd>{r.film_issue_at ? `Coach reported ${dateTime(r.film_issue_at)}${r.film_issue_note ? `: “${r.film_issue_note}”` : ""} — waiting for family` : "—"}</dd>
+            <dt className="text-muted">Takeaways</dt><dd>{[r.takeaway_strength && `✓ ${r.takeaway_strength}`, r.takeaway_improve && `↗ ${r.takeaway_improve}`, r.takeaway_next && `→ ${r.takeaway_next}`].filter(Boolean).join(" · ") || "—"}</dd>
+            <dt className="text-muted">Family rating</dt><dd>{r.rating ? `${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)} · would buy again: ${r.would_buy_again == null ? "—" : r.would_buy_again ? "yes" : "no"}${r.rating_comment ? ` · “${r.rating_comment}”` : ""}` : "—"}</dd>
           </dl>
         </section>
         <section className="card p-5">
@@ -106,7 +110,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
               {emails.map((e) => (
                 <tr key={e.id}>
                   <td className="whitespace-nowrap text-muted">{dateTime(e.created_at)}</td>
-                  <td>{e.template}<div className="text-xs text-muted">{e.to_email}</div></td>
+                  <td>{e.channel === "sms" ? "📱 " : ""}{e.template}<div className="text-xs text-muted">{e.to_email}</div></td>
                   <td><Pill value={e.status === "sent" ? "succeeded" : e.status} /></td>
                 </tr>
               ))}

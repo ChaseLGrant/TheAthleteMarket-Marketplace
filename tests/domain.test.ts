@@ -4,7 +4,8 @@ import { paidRequestGate, payoutGate } from "@/lib/compliance";
 import { canTransition, sourcesFor } from "@/lib/state-machine";
 import { makeToken, verifyToken, makeAdminSession, verifyAdminSession } from "@/lib/tokens";
 import { requestSchema, isSafeFilmUrl } from "@/lib/validation";
-import { DEFAULT_SETTINGS } from "@/lib/store";
+import { DEFAULT_SETTINGS as PROD_SETTINGS } from "@/lib/store";
+const DEFAULT_SETTINGS = { ...PROD_SETTINGS, require_payouts_before_booking: false };
 import type { Coach } from "@/lib/types";
 import { input } from "./helpers";
 
@@ -15,6 +16,8 @@ const coach = (o: Partial<Coach> = {}): Coach => ({
   eligibility_basis: "former", authorization_reference: null, eligibility_reviewed_at: null, eligibility_expires_at: null,
   price_cents: 4000, stripe_account_id: null, stripe_payouts_enabled: false, stripe_transfers_active: false,
   stripe_details_submitted: false, opted_out: false, is_demo: false, application_message: null,
+  phone: null, sms_opt_in_at: null, sms_opted_out: false, paused: false, intro_video_path: null, delivered_count: 0,
+  delivery_hours_total: 0, rating_sum: 0, rating_count: 0, payout_invite_sent_at: null, last_summary_at: null,
   created_at: "", updated_at: "", ...o,
 });
 
@@ -58,6 +61,15 @@ describe("compliance gate", () => {
     expect(paidRequestGate(coach({ eligibility_expires_at: "2020-01-01T00:00:00Z" }), DEFAULT_SETTINGS).ok).toBe(false);
     expect(paidRequestGate(coach({ eligibility_basis: " " }), DEFAULT_SETTINGS).ok).toBe(false);
     expect(paidRequestGate(coach({ price_cents: 3500 }), DEFAULT_SETTINGS).ok).toBe(false);
+  });
+  it("by default a coach must finish Stripe payout setup BEFORE they can be booked", () => {
+    expect(paidRequestGate(coach(), PROD_SETTINGS).ok).toBe(false);
+    expect(paidRequestGate(coach({ stripe_account_id: "a", stripe_transfers_active: true, stripe_details_submitted: true }), PROD_SETTINGS).ok).toBe(true);
+  });
+  it("a paused coach can't be booked, but still gets paid for delivered work", () => {
+    const ready = { stripe_account_id: "a", stripe_transfers_active: true, stripe_details_submitted: true, paused: true };
+    expect(paidRequestGate(coach(ready), PROD_SETTINGS).reasons.join()).toMatch(/paused/);
+    expect(payoutGate(coach(ready), PROD_SETTINGS).ok).toBe(true);
   });
   it("payout requires completed Stripe onboarding", () => {
     expect(payoutGate(coach(), DEFAULT_SETTINGS).ok).toBe(false);

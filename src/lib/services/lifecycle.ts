@@ -15,8 +15,10 @@ import { sourcesFor } from "../state-machine";
 import { randomRef } from "../tokens";
 import type { Coach, EvalRequest, RequestStatus } from "../types";
 import type { RequestInput } from "../validation";
-import { adminRequestUrl, coachDeclineUrl, coachReviewUrl, deliveryUrl, payoutsUrl, unsubscribeUrl } from "./links";
-import { alertAdmin, sendEmail } from "./notify";
+import { adminRequestUrl, coachDeclineUrl, coachReviewUrl, deliveryUrl, hubUrl, payoutsUrl, secondOpinionUrl, unsubscribeUrl } from "./links";
+import { alertAdmin, sendEmail, sendSms, textAdmin } from "./notify";
+import { sms as smsText } from "../email/templates";
+import { tokenId, verifyToken } from "../tokens";
 
 export class UserFacingError extends Error {
   constructor(message: string, public code = "bad_request") {
@@ -67,6 +69,13 @@ export async function createRequestAndCheckout(
     throw new UserFacingError("This coach is at capacity right now. Please choose another coach or try again in a few days.", "capacity");
 
   const pb = priceBreakdown(coach.price_cents!, settings);
+  // "Second opinion" purchases link back to the original request (for repeat-purchase analytics).
+  let parentRequestId: string | null = null;
+  if (input.fromToken) {
+    const pid = tokenId(input.fromToken);
+    const parent = pid ? await store.getRequest(pid) : null;
+    if (parent && verifyToken("again", input.fromToken, parent.delivery_link_nonce)) parentRequestId = parent.id;
+  }
   const now = deps.now();
   const minor = input.athleteIsMinor === "yes";
 
@@ -97,6 +106,7 @@ export async function createRequestAndCheckout(
         coach_payout_cents: pb.coach_payout_cents,
         utm_source: input.utmSource,
         utm_campaign: input.utmCampaign,
+        parent_request_id: parentRequestId,
       });
     } catch (e) {
       if (i === 2 || !/duplicate|unique/i.test(errMsg(e))) throw e; // ref collision → retry
@@ -163,6 +173,8 @@ export async function handleCheckoutPaid(
     if (paid) {
       await event(deps, paid, "payment_succeeded", "stripe", req.status, "paid", { amount_total: s.amount_total });
       await deps.store.track("paid", paid.coach_id, paid.id).catch(() => {});
+      const c = await deps.store.getCoach(paid.coach_id);
+      if (c) await textAdmin(deps, smsText.adminNewOrder(paid, c), `admin-order-${paid.id}`);
       if (s.amount_total != null && s.amount_total !== paid.price_cents) {
         await alertAdmin(deps, "Checkout amount mismatch", [`${paid.ref}: expected ${paid.price_cents}, got ${s.amount_total}`], adminRequestUrl(paid.id));
       }
@@ -217,6 +229,8 @@ export async function notifyCoach(deps: Deps, requestId: string) {
         declineUrl: coachDeclineUrl(req),
         unsubscribeUrl: unsubscribeUrl(coach.email!),
         postalAddress: env.postalAddress(),
+        hubUrl: hubUrl(coach),
+        otherOpen: Math.max(0, (await deps.store.countOpenRequestsForCoach(coach.id)) - 1),
       }),
       template: "coach_invite",
       idempotencyKey: `coach-invite-${req.id}`,
@@ -236,7 +250,17 @@ export async function notifyCoach(deps: Deps, requestId: string) {
   const r = await deps.store.casRequest(req.id, { status: ["paid"] }, {
     status: "coach_notified", coach_notified_at: iso(deps.now()), last_error: null,
   });
-  if (r) await event(deps, r, "coach_notified", "system", "paid", "coach_notified", { to: coach.email });
+  if (r) {
+    await event(deps, r, "coach_notified", "system", "paid", "coach_notified", { to: coach.email });
+    await textCoach(deps, coach, r, smsText.coachNewRequest(r, coachReviewUrl(r)), `coach-sms-new-${r.id}`, "coach_new_request");
+  }
+}
+
+/** Text a coach if they opted in. A STOP reply marks them opted out so we never text them again. */
+export async function textCoach(deps: Deps, coach: Coach, req: EvalRequest | null, body: string, dedupeKey: string, template: string) {
+  if (!coach.phone || !coach.sms_opt_in_at || coach.sms_opted_out) return;
+  const r = await sendSms(deps, { to: coach.phone, body, template, dedupeKey, requestId: req?.id ?? null, coachId: coach.id });
+  if (r === "opted_out") await deps.store.updateCoach(coach.id, { sms_opted_out: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +303,8 @@ function assertCoachCanAct(req: EvalRequest, now: Date) {
 }
 
 export async function submitVideo(
-  deps: Deps, req: EvalRequest, a: { path: string; durationSeconds?: number | null; attest: true },
+  deps: Deps, req: EvalRequest,
+  a: { path: string; durationSeconds?: number | null; attest: true; takeaways?: { strength: string | null; improve: string | null; next: string | null } },
 ): Promise<EvalRequest> {
   if (req.status === "submitted" || req.status === "completed") {
     if (req.video_path === a.path) return req; // idempotent double-tap
@@ -309,6 +334,10 @@ export async function submitVideo(
       video_mime: stat.mime,
       video_size_bytes: stat.size,
       video_duration_seconds: a.durationSeconds ?? null,
+      takeaway_strength: a.takeaways?.strength ?? null,
+      takeaway_improve: a.takeaways?.improve ?? null,
+      takeaway_next: a.takeaways?.next ?? null,
+      film_issue_at: null,
     },
   );
   if (!r) {
@@ -329,7 +358,8 @@ export async function submitVideo(
   const settings = await deps.store.getSettings();
   if (settings.require_admin_review) {
     await alertAdmin(deps, "Video awaiting review", [`${r.ref} — review before delivery.`], adminRequestUrl(r.id));
-    return r;
+    await textAdmin(deps, smsText.adminReview(r), `admin-review-${r.id}`);
+    return mustRequest(deps, r.id);
   }
   return completeRequest(deps, r.id, "system");
 }
@@ -382,11 +412,20 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
   );
   if (!r) return mustRequest(deps, requestId);
   await event(deps, r, "completed", actor, "submitted", "completed");
-  const coach = (await deps.store.getCoach(r.coach_id))!;
+  let coach = (await deps.store.getCoach(r.coach_id))!;
+  // Running delivery-speed stats power the "Usually delivers in ~N days" badge.
+  const hours = r.paid_at ? Math.max(0, (Date.parse(now) - Date.parse(r.paid_at)) / 3_600_000) : 0;
+  coach = await deps.store.updateCoach(coach.id, {
+    delivered_count: coach.delivered_count + 1,
+    delivery_hours_total: Number(coach.delivery_hours_total) + Math.round(hours * 10) / 10,
+  });
   try {
     await sendEmail(deps, {
       to: r.purchaser_email,
-      rendered: purchaserDelivered({ req: r, coach, videoUrl: deliveryUrl(r), availableUntil: videoAvailableUntil(r, await deps.store.getSettings()), postalAddress: env.postalAddress() }),
+      rendered: purchaserDelivered({
+        req: r, coach, videoUrl: deliveryUrl(r), availableUntil: videoAvailableUntil(r, await deps.store.getSettings()),
+        postalAddress: env.postalAddress(), secondOpinionUrl: secondOpinionUrl(r),
+      }),
       template: "purchaser_delivered",
       idempotencyKey: `delivered-${r.id}`,
       requestId: r.id,

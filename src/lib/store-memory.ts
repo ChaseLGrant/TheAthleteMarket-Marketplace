@@ -35,7 +35,8 @@ export class MemoryStore implements Store {
     return clone([...this.coaches.values()].filter((c) => c.email?.toLowerCase() === email.trim().toLowerCase()));
   }
   async searchCoaches(s: Parameters<Store["searchCoaches"]>[0]) {
-    let list = [...this.coaches.values()].filter((c) => c.listing_type === "directory" || c.verification_status === "verified");
+    let list = [...this.coaches.values()].filter((c) =>
+      c.listing_type === "directory" ? !!s.includeDirectory : c.verification_status === "verified");
     if (s.q?.trim()) {
       const terms = s.q.trim().toLowerCase().split(/\s+/);
       list = list.filter((c) => terms.every((t) => searchText(c).includes(t)));
@@ -74,6 +75,8 @@ export class MemoryStore implements Store {
       authorization_reference: null, eligibility_reviewed_at: null, eligibility_expires_at: null, price_cents: null,
       stripe_account_id: null, stripe_payouts_enabled: false, stripe_transfers_active: false,
       stripe_details_submitted: false, opted_out: false, is_demo: false, application_message: null,
+      phone: null, sms_opt_in_at: null, sms_opted_out: false, paused: false, intro_video_path: null, delivered_count: 0,
+      delivery_hours_total: 0, rating_sum: 0, rating_count: 0, payout_invite_sent_at: null, last_summary_at: null,
       created_at: nowIso(), updated_at: nowIso(), ...c,
     };
     this.coaches.set(row.id, row);
@@ -99,7 +102,9 @@ export class MemoryStore implements Store {
       coach_notified_at: null, coach_viewed_at: null, accepted_at: null, submitted_at: null, completed_at: null,
       delivered_at: null, declined_at: null, decline_reason: null, expired_at: null, refunded_at: null,
       paid_out_at: null, coach_attested_at: null, last_reminder_at: null, onboarding_email_sent_at: null,
-      purged_at: null, video_deleted_at: null, video_path: null, video_mime: null, video_size_bytes: null, video_duration_seconds: null,
+      purged_at: null, video_deleted_at: null, takeaway_strength: null, takeaway_improve: null, takeaway_next: null,
+      rating: null, would_buy_again: null, rating_comment: null, rated_at: null, film_issue_at: null, film_issue_note: null,
+      video_path: null, video_mime: null, video_size_bytes: null, video_duration_seconds: null,
     };
     this.requests.set(row.id, row);
     return clone(row);
@@ -117,6 +122,7 @@ export class MemoryStore implements Store {
     if (where.refund_status && !where.refund_status.includes(r.refund_status)) return null;
     if (where.expiresAfter && !(r.expires_at && r.expires_at > where.expiresAfter)) return null;
     if (where.expiresBefore && !(r.expires_at && r.expires_at <= where.expiresBefore)) return null;
+    if (where.isNull?.some((col) => r[col] != null)) return null;
     Object.assign(r, patch, { updated_at: nowIso() });
     return clone(r);
   }
@@ -161,6 +167,18 @@ export class MemoryStore implements Store {
   }
   async listEmails(f: { request_id?: string; limit?: number }) {
     return clone(this.emails.filter((e) => !f.request_id || e.request_id === f.request_id).slice(0, f.limit ?? 200));
+  }
+  async claimMessage(row: Omit<EmailLogRow, "id" | "created_at"> & { dedupe_key: string }) {
+    if (this.emails.some((e) => e.dedupe_key === row.dedupe_key)) return false;
+    this.emails.unshift({ ...row, id: this.seq++, created_at: nowIso() });
+    return true;
+  }
+  async finishMessage(key: string, patch: { status: EmailLogRow["status"]; provider_id?: string | null; error?: string | null }) {
+    const e = this.emails.find((x) => x.dedupe_key === key);
+    if (e) Object.assign(e, patch);
+  }
+  async listParticipatingCoaches() {
+    return clone([...this.coaches.values()].filter((c) => c.listing_type === "participating"));
   }
   async isSuppressed(email: string) { return this.suppressions.has(email.toLowerCase()); }
   async suppress(email: string, reason: string) { this.suppressions.set(email.toLowerCase(), reason); }

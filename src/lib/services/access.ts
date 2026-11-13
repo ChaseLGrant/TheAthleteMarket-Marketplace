@@ -33,3 +33,22 @@ export function resolveUnsubscribe(token: string): string | null {
   if (!id || !verifyToken("unsub", token)) return null;
   return emailFromTokenId(id);
 }
+
+/** Family's "fix my film link" page. */
+export async function resolveFixLink(deps: Deps, token: string): Promise<{ req: EvalRequest; coach: Coach } | null> {
+  const id = tokenId(token);
+  if (!id) return null;
+  const req = await deps.store.getRequest(id);
+  if (!req || !verifyToken("fix", token, req.delivery_link_nonce)) return null;
+  const coach = await deps.store.getCoach(req.coach_id);
+  return coach ? { req, coach } : null;
+}
+
+/** "Second opinion" prefill: returns the original request (completed only). */
+export async function resolveAgainLink(deps: Deps, token: string): Promise<EvalRequest | null> {
+  const id = tokenId(token);
+  if (!id) return null;
+  const req = await deps.store.getRequest(id);
+  if (!req || !verifyToken("again", token, req.delivery_link_nonce) || req.status !== "completed" || req.purged_at) return null;
+  return req;
+}

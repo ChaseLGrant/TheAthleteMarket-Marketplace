@@ -6,6 +6,7 @@ import { Avatar, Notice, VerifiedBadge } from "@/components/ui";
 import { paidRequestGate } from "@/lib/compliance";
 import { money } from "@/lib/format";
 import { getDeps, isBot } from "@/lib/server";
+import { resolveAgainLink } from "@/lib/services/access";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Request an evaluation", robots: { index: false } };
@@ -21,6 +22,16 @@ export default async function RequestPage({ params, searchParams }: P) {
   const settings = await deps.store.getSettings();
   const gate = paidRequestGate(coach, settings);
   if (!(await isBot())) deps.store.track("form_view", coach.id).catch(() => {});
+  // Second opinion: pre-fill from the original (signed) request.
+  const original = sp.from ? await resolveAgainLink(deps, sp.from) : null;
+  const prefill = original
+    ? {
+        athleteName: original.athlete_name, sport: original.sport, position: original.position, gradYear: String(original.grad_year),
+        filmUrl: original.film_url, athleteIsMinor: original.athlete_is_minor ? "yes" : "no", relationship: original.purchaser_relationship,
+        purchaserName: original.purchaser_name, purchaserEmail: original.purchaser_email, athleteEmail: original.athlete_email ?? "",
+        metrics: original.metrics ?? "", gpa: original.gpa ?? "",
+      }
+    : undefined;
 
   if (!gate.ok) {
     return (
@@ -37,6 +48,7 @@ export default async function RequestPage({ params, searchParams }: P) {
       <Link href={`/coaches/${coach.slug}`} className="text-sm font-medium text-muted hover:text-navy">← {coach.full_name}</Link>
       <h1 className="mt-3 text-3xl font-bold tracking-tight">Request your evaluation</h1>
       <p className="mt-1 text-muted">Takes about a minute. No account needed.</p>
+      {original && <div className="mt-4"><Notice tone="success" title="Second opinion">{original.athlete_name}&apos;s details are already filled in — just check and continue.</Notice></div>}
       {sp.cancelled && <div className="mt-4"><Notice tone="warn">Checkout was cancelled — you haven&apos;t been charged. Your details are below whenever you&apos;re ready.</Notice></div>}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
@@ -49,6 +61,8 @@ export default async function RequestPage({ params, searchParams }: P) {
             deadlineDays={settings.deadline_days}
             utmSource={sp.utm_source}
             utmCampaign={sp.utm_campaign}
+            fromToken={original ? sp.from : undefined}
+            prefill={prefill}
           />
         </div>
         <aside className="order-first lg:order-none lg:sticky lg:top-24 lg:self-start">

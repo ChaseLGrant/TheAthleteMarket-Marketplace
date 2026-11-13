@@ -11,6 +11,7 @@ export async function GET() {
     stripe: !!process.env.STRIPE_SECRET_KEY,
     stripeWebhook: env.stripeWebhookSecrets().length > 0,
     resend: !!process.env.RESEND_API_KEY,
+    twilio: !!env.twilio(),
     appSecret: (process.env.APP_SECRET ?? "").length >= 32,
     cronSecret: !!process.env.CRON_SECRET,
     adminPassword: !!process.env.ADMIN_PASSWORD,

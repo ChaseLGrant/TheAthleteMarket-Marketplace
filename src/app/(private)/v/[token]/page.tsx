@@ -5,6 +5,8 @@ import { DISCLAIMER } from "@/lib/constants";
 import { dateOnly } from "@/lib/format";
 import { videoAvailableUntil } from "@/lib/retention";
 import { resolveDeliveryLink } from "@/lib/services/access";
+import { secondOpinionUrl } from "@/lib/services/links";
+import { RatingForm } from "@/components/rating-form";
 import { getDeps, isBot } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +55,16 @@ export default async function VideoPage({ params }: { params: Promise<{ token: s
           </div>
         </div>
       </div>
+      {(req.takeaway_strength || req.takeaway_improve || req.takeaway_next) && (
+        <div className="card space-y-3 p-5">
+          <h2 className="font-semibold">Coach&apos;s takeaways</h2>
+          <dl className="space-y-2 text-[15px]">
+            {req.takeaway_strength && <div><dt className="text-xs font-semibold uppercase tracking-wide text-success">Top strength</dt><dd>{req.takeaway_strength}</dd></div>}
+            {req.takeaway_improve && <div><dt className="text-xs font-semibold uppercase tracking-wide text-warn">Work on</dt><dd>{req.takeaway_improve}</dd></div>}
+            {req.takeaway_next && <div><dt className="text-xs font-semibold uppercase tracking-wide text-blue">Next step</dt><dd>{req.takeaway_next}</dd></div>}
+          </dl>
+        </div>
+      )}
       <div className="card space-y-3 p-5">
         <a href={downloadUrl} className="btn-primary w-full">⬇ Download video</a>
         {until && (
@@ -65,10 +77,15 @@ export default async function VideoPage({ params }: { params: Promise<{ token: s
         <p className="font-semibold text-navy">This link is private.</p>
         <p className="mt-1">Anyone with this link can watch the video, so please don&apos;t post it publicly. Reply to your delivery email if you&apos;d like it revoked.</p>
       </div>
-      <p className="text-xs leading-relaxed text-subtle">{DISCLAIMER}</p>
-      <div className="text-center">
-        <Link href="/coaches" className="btn-ghost">Get another coach&apos;s perspective</Link>
+      <div className="card p-5">
+        <RatingForm token={token} coachFirstName={coach.full_name.split(" ")[0]!} alreadyRated={req.rating} />
       </div>
+      <div className="card p-5 text-center">
+        <p className="font-semibold">Want a second opinion?</p>
+        <p className="mt-1 text-sm text-muted">Another coach, same film — {req.athlete_name.split(" ")[0]}&apos;s details are already filled in.</p>
+        <Link href={secondOpinionUrl(req).replace(/^https?:\/\/[^/]+/, "")} className="btn-primary mt-4 w-full">Get a second coach&apos;s take</Link>
+      </div>
+      <p className="text-xs leading-relaxed text-subtle">{DISCLAIMER}</p>
     </div>
   );
 }

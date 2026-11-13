@@ -30,6 +30,9 @@ export function paidRequestGate(coach: Coach, settings: Settings, now = new Date
       reasons.push("Active college coach has no recorded institutional + governing-body authorization.");
   }
   if (coach.opted_out) reasons.push("Coach has opted out of emails.");
+  if (coach.paused) reasons.push("Coach has paused new requests.");
+  if (settings.require_payouts_before_booking && !(coach.stripe_transfers_active && coach.stripe_details_submitted))
+    reasons.push("Payout setup with Stripe is not complete yet.");
   if (!coach.email) reasons.push("No email address on file.");
   if (!isValidTier(coach.price_cents, settings)) reasons.push("Price is not one of the configured tiers.");
   return { ok: reasons.length === 0, reasons };
@@ -38,8 +41,10 @@ export function paidRequestGate(coach: Coach, settings: Settings, now = new Date
 /** Additional checks before money moves to a coach. */
 export function payoutGate(coach: Coach, settings: Settings, now = new Date()): GateResult {
   const base = paidRequestGate(coach, settings, now);
-  // Opting out of future emails must not forfeit money already earned, and price changes don't matter here.
-  const reasons = base.reasons.filter((r) => !r.startsWith("Coach has opted out") && !r.startsWith("Price is not"));
+  // Opting out, pausing or a price change never forfeits money already earned.
+  const reasons = base.reasons.filter(
+    (r) => !r.startsWith("Coach has opted out") && !r.startsWith("Coach has paused") && !r.startsWith("Price is not") && !r.startsWith("Payout setup with Stripe"),
+  );
   if (!coach.stripe_account_id) reasons.push("Coach has not started payout setup.");
   else if (!coach.stripe_transfers_active || !coach.stripe_details_submitted)
     reasons.push("Coach payout setup / identity verification is incomplete in Stripe.");

@@ -32,6 +32,10 @@ export default async function Settings() {
         </div>
         <label className="flex items-start gap-3 text-sm"><input type="checkbox" name="require_admin_review" defaultChecked={s.require_admin_review} className="mt-0.5 h-5 w-5 accent-blue" />
           <span><strong>Review every video before delivery</strong> (recommended for the first ~20 evaluations)</span></label>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" name="require_payouts_before_booking" defaultChecked={s.require_payouts_before_booking} className="mt-0.5 h-5 w-5 accent-blue" />
+          <span><strong>Coaches must finish Stripe payout setup before they can be booked</strong> (recommended — every delivery then pays instantly)</span></label>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" name="show_directory_listings" defaultChecked={s.show_directory_listings} className="mt-0.5 h-5 w-5 accent-blue" />
+          <span><strong>Show directory listings</strong> (coaches who haven&apos;t joined, labeled &ldquo;not bookable&rdquo; with a waitlist). Off at launch so families only see coaches they can book.</span></label>
         <label className="flex items-start gap-3 text-sm"><input type="checkbox" name="allow_active_college_coaches" defaultChecked={s.allow_active_college_coaches} className="mt-0.5 h-5 w-5 accent-blue" />
           <span><strong>Allow active college coaches</strong> — only after legal counsel confirms a compliant structure. Each coach still needs a recorded institutional + governing-body authorization.</span></label>
         {s.allow_active_college_coaches && <Notice tone="warn">Active college coaches are enabled platform-wide. Make sure counsel has signed off.</Notice>}

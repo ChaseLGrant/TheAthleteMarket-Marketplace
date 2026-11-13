@@ -13,7 +13,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     if (!found) return json({ error: "Invalid link" }, 404);
     const body = submitSchema.safeParse(await req.json().catch(() => null));
     if (!body.success) return json({ error: body.error.issues[0]?.message ?? "Invalid submission" }, 400);
-    const r = await submitVideo(deps, found.req, { path: body.data.path, durationSeconds: body.data.durationSeconds ?? null, attest: true });
+    const r = await submitVideo(deps, found.req, { path: body.data.path, durationSeconds: body.data.durationSeconds ?? null, attest: true, takeaways: body.data.takeaways });
     return json({ status: r.status, payout_status: r.payout_status });
   } catch (e) {
     return handleApiError(e);

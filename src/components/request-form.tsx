@@ -2,6 +2,7 @@
 import { useActionState, useState } from "react";
 import { submitRequest, type FormState } from "@/app/actions";
 import { cx } from "@/lib/format";
+import { FilmTip } from "./film-tip";
 
 interface Props {
   coachSlug: string;
@@ -11,6 +12,9 @@ interface Props {
   deadlineDays: number;
   utmSource?: string;
   utmCampaign?: string;
+  /** Second-opinion: signed token + the original request's details to pre-fill. */
+  fromToken?: string;
+  prefill?: Record<string, string>;
 }
 
 const thisYear = new Date().getFullYear();
@@ -18,7 +22,8 @@ const YEARS = Array.from({ length: 9 }, (_, i) => thisYear + i - 1);
 
 export function RequestForm(p: Props) {
   const [state, action, pending] = useActionState<FormState, FormData>(submitRequest, {});
-  const v = state.values ?? {};
+  const v = state.values ?? p.prefill ?? {};
+  const [film, setFilm] = useState(v.filmUrl ?? "");
   const err = state.fields ?? {};
   const [minor, setMinor] = useState<"yes" | "no">((v.athleteIsMinor as "yes" | "no") ?? "yes");
   const [rel, setRel] = useState(v.relationship ?? "parent_guardian");
@@ -31,6 +36,7 @@ export function RequestForm(p: Props) {
       <input type="hidden" name="relationship" value={effectiveRel} />
       <input type="hidden" name="utmSource" value={p.utmSource ?? ""} />
       <input type="hidden" name="utmCampaign" value={p.utmCampaign ?? ""} />
+      <input type="hidden" name="fromToken" value={p.fromToken ?? ""} />
       <div className="hidden" aria-hidden>
         <label>Company <input name="company" tabIndex={-1} autoComplete="off" /></label>
       </div>
@@ -55,17 +61,15 @@ export function RequestForm(p: Props) {
             {err.gradYear && <p className="field-error">{err.gradYear}</p>}
           </div>
         </div>
-        <Field
-          label="Highlight film link"
-          name="filmUrl"
-          type="url"
-          inputMode="url"
-          placeholder="https://www.hudl.com/… or https://youtu.be/…"
-          hint="Hudl, YouTube, Vimeo or Google Drive. Make sure it's viewable by anyone with the link."
-          error={err.filmUrl}
-          defaultValue={v.filmUrl}
-          required
-        />
+        <div>
+          <label htmlFor="filmUrl" className="label">Highlight film link</label>
+          <input
+            id="filmUrl" name="filmUrl" type="url" inputMode="url" required value={film} onChange={(e) => setFilm(e.target.value)}
+            placeholder="https://www.hudl.com/… or https://youtu.be/…" aria-invalid={!!err.filmUrl}
+            className={cx("field", err.filmUrl && "border-danger focus:border-danger focus:ring-danger/15")}
+          />
+          {err.filmUrl ? <p className="field-error">{err.filmUrl}</p> : <FilmTip url={film} />}
+        </div>
         <div>
           <p className="label">Is the athlete under 18?</p>
           <div className="grid grid-cols-2 gap-2">

@@ -55,8 +55,10 @@ export class SupabaseStore implements Store {
   }
   async searchCoaches(s: Parameters<Store["searchCoaches"]>[0]) {
     let q = this.db.from("coaches").select("*", { count: "exact" });
-    // Unverified applicants never appear publicly.
-    q = q.or("listing_type.eq.directory,verification_status.eq.verified");
+    // Unverified applicants never appear publicly; directory listings only when enabled in settings.
+    q = s.includeDirectory
+      ? q.or("listing_type.eq.directory,verification_status.eq.verified")
+      : q.eq("listing_type", "participating").eq("verification_status", "verified");
     if (s.q?.trim()) {
       for (const term of s.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) {
         q = q.ilike("search_text", `%${escapeLike(term)}%`);
@@ -118,6 +120,7 @@ export class SupabaseStore implements Store {
     if (where.refund_status) q = q.in("refund_status", where.refund_status);
     if (where.expiresAfter) q = q.gt("expires_at", where.expiresAfter);
     if (where.expiresBefore) q = q.lte("expires_at", where.expiresBefore);
+    for (const col of where.isNull ?? []) q = q.is(col, null);
     const r = await q.select("*");
     const rows = must(r, "request.cas") as EvalRequest[];
     return rows[0] ?? null;
@@ -183,6 +186,18 @@ export class SupabaseStore implements Store {
     let q = this.db.from("email_log").select("*");
     if (f.request_id) q = q.eq("request_id", f.request_id);
     return must(await q.order("created_at", { ascending: false }).limit(f.limit ?? 200), "emails") as EmailLogRow[];
+  }
+  async claimMessage(row: Omit<EmailLogRow, "id" | "created_at"> & { dedupe_key: string }) {
+    const r = await this.db.from("email_log").insert(row);
+    if (!r.error) return true;
+    if (r.error.code === "23505") return false;
+    throw new Error(`[db] claimMessage: ${r.error.message}`);
+  }
+  async finishMessage(key: string, patch: { status: EmailLogRow["status"]; provider_id?: string | null; error?: string | null }) {
+    must(await this.db.from("email_log").update(patch).eq("dedupe_key", key), "finishMessage");
+  }
+  async listParticipatingCoaches() {
+    return must(await this.db.from("coaches").select("*").eq("listing_type", "participating").limit(5000), "coaches.participating") as Coach[];
   }
   async isSuppressed(email: string) {
     const r = await this.db.from("email_suppressions").select("email").eq("email", email.toLowerCase()).maybeSingle();

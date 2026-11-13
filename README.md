@@ -34,7 +34,7 @@ Demo mode refuses to start on a Vercel production deployment.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Local dev server |
-| `npm test` | 47 unit/integration tests for money + state logic (Vitest) |
+| `npm test` | 70 unit/integration tests for money + state logic (Vitest) |
 | `npm run typecheck` | TypeScript |
 | `npm run build` | Production build |
 

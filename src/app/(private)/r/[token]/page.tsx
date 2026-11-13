@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Recorder } from "@/components/recorder";
+import { FilmIssueButton } from "@/components/film-issue";
 import { Notice } from "@/components/ui";
 import { dateOnly, money } from "@/lib/format";
 import { filmEmbedUrl, filmHost } from "@/lib/film";
@@ -96,6 +97,13 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
           </div>
         ) : null}
         <a href={req.film_url} target="_blank" rel="noopener noreferrer nofollow" className="btn-ghost mt-3 w-full">Open film on {filmHost(req.film_url)} ↗</a>
+        {req.film_issue_at ? (
+          <p className="mt-3 rounded-xl bg-warn-50 px-4 py-3 text-sm text-[#6b3d00]">
+            You reported the film wouldn&apos;t open. We&apos;ve asked the family for a new link and will email{coach.sms_opt_in_at ? " and text" : ""} you the moment it arrives.
+          </p>
+        ) : (
+          <FilmIssueButton token={token} />
+        )}
       </section>
 
       <section className="card p-5">
@@ -106,11 +114,31 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
           <li>• 1–2 things to improve, and one next step</li>
           <li>• Please don&apos;t promise an offer, scholarship, admission or roster spot</li>
         </ul>
-        <div className="mt-4"><Recorder token={token} athleteFirstName={first} amountLabel={amount} /></div>
+        <div className="mt-4">
+          <Recorder
+            uploadUrlEndpoint={`/api/coach/${token}/upload-url`}
+            submitEndpoint={`/api/coach/${token}/submit`}
+            acceptEndpoint={`/api/coach/${token}/accept`}
+            submitLabel={`Submit Video & Claim ${amount}`}
+            prompts={["Who you are + what you watched", `1–2 strengths you saw in ${first}`, "1–2 things to improve + one next step"]}
+            withTakeaways
+            attestation={
+              <>I&apos;m permitted to accept this payment under any rules that apply to me (including my employer and athletics governing body),
+                this video is my own honest feedback, and it does not promise recruitment, a scholarship, admission or a roster spot.</>
+            }
+            done={
+              <div className="rounded-2xl bg-success-50 p-6 text-center ring-1 ring-[#c3e8d2]">
+                <p className="text-4xl">✓</p>
+                <p className="mt-2 text-xl font-bold text-navy">Sent to {first}&apos;s family</p>
+                <p className="mt-1 text-sm text-muted">Your {amount} is on its way via Stripe. You can close this page.</p>
+              </div>
+            }
+          />
+        </div>
       </section>
 
       <Notice tone="info">
-        Payment is sent via Stripe after you submit. First time? You&apos;ll complete a quick, secure Stripe payout setup — we never see your bank login.
+        Your {amount} is sent automatically via Stripe the moment you submit. Busy? You can decline, or pause new requests from your coach hub.
       </Notice>
       <p className="pb-6 text-center text-sm">
         <Link href={`/r/${token}/decline`} className="font-medium text-muted underline">Can&apos;t do this one? Decline it</Link>

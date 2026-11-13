@@ -60,6 +60,13 @@ export function ApplyForm() {
         </div>
       </div>
       <F n="credentials" l="Credentials (one line)" />
+      <div className="space-y-2">
+        <F n="phone" l="Mobile number (optional — get requests by text)" t="tel" />
+        <label className="flex items-start gap-3 text-xs leading-relaxed text-muted">
+          <input type="checkbox" name="smsConsent" defaultChecked={v.smsConsent === "on"} className="mt-0.5 h-5 w-5 shrink-0 accent-blue" />
+          <span>Text me about new evaluation requests and deadlines. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. Consent isn&apos;t required to apply.</span>
+        </label>
+      </div>
       <div>
         <label htmlFor="message" className="label">Anything else? (LinkedIn, staff page, references)</label>
         <textarea id="message" name="message" rows={3} className="field" defaultValue={v.message} />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx, initials, money } from "@/lib/format";
 import type { Coach } from "@/lib/types";
+import { deliveryBadge, ratingBadge } from "@/lib/services/coach-stats";
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -68,10 +69,21 @@ export function Notice({ tone = "info", title, children }: { tone?: "info" | "wa
   );
 }
 
-export function CoachCard({ coach, available }: { coach: Coach; available: boolean }) {
+export function Stars({ coach }: { coach: Pick<Coach, "rating_sum" | "rating_count"> }) {
+  const r = ratingBadge(coach);
+  if (!r) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-sm font-semibold text-navy" aria-label={`Rated ${r.avg} out of 5 by ${r.count} families`}>
+      <span className="text-[#F5A524]">★</span>{r.avg} <span className="font-normal text-muted">({r.count})</span>
+    </span>
+  );
+}
+
+export function CoachCard({ coach, available, query = "" }: { coach: Coach; available: boolean; query?: string }) {
+  const speed = deliveryBadge(coach);
   return (
     <Link
-      href={`/coaches/${coach.slug}`}
+      href={`/coaches/${coach.slug}${query}`}
       className="card group flex flex-col gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] focus-visible:outline-2 focus-visible:outline-blue"
     >
       <div className="flex items-start gap-3.5">
@@ -79,8 +91,13 @@ export function CoachCard({ coach, available }: { coach: Coach; available: boole
         <div className="min-w-0 flex-1">
           <p className="truncate text-[17px] font-semibold text-navy">{coach.full_name}</p>
           <p className="truncate text-sm text-muted">{[coach.title, coach.school].filter(Boolean).join(" · ")}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <Stars coach={coach} />
+            {coach.intro_video_path && <span className="text-xs font-medium text-blue">▶ Intro video</span>}
+          </div>
         </div>
       </div>
+      {speed && <p className="-mt-1 text-xs font-medium text-success">⚡ {speed}</p>}
       <div className="flex flex-wrap gap-1.5 text-xs">
         <span className="pill bg-surface text-navy ring-1 ring-line">{coach.sport}</span>
         {coach.division && <span className="pill bg-surface text-navy ring-1 ring-line">{coach.division}</span>}
@@ -100,7 +117,7 @@ export function CoachCard({ coach, available }: { coach: Coach; available: boole
         ) : (
           <>
             <VerifiedBadge />
-            <span className="text-xs font-medium text-muted">Unavailable</span>
+            <span className="text-xs font-medium text-muted">{coach.paused ? "Taking a short break" : "Unavailable"}</span>
           </>
         )}
       </div>

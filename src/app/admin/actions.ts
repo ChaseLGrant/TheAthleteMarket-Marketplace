@@ -19,6 +19,8 @@ import {
 } from "@/lib/services/lifecycle";
 import { DIVISIONS } from "@/lib/constants";
 import { videoAvailableUntil } from "@/lib/retention";
+import { sendPayoutInvite, setPaused } from "@/lib/services/experience";
+import { toE164 } from "@/lib/phone";
 import type { Coach } from "@/lib/types";
 
 export async function login(_: { error?: string }, fd: FormData): Promise<{ error?: string }> {
@@ -122,6 +124,9 @@ const coachSchema = z.object({
   authorization_reference: z.string().trim().max(1000).optional(),
   eligibility_expires_at: z.string().trim().optional(),
   price_cents: z.string().trim().optional(),
+  phone: z.string().trim().max(30).optional(),
+  sms_consent: z.string().optional(),
+  paused: z.string().optional(),
 });
 const nul = (v?: string) => (v ? v : null);
 
@@ -142,7 +147,14 @@ export async function saveCoach(_: Result, fd: FormData): Promise<Result> {
       eligibility_basis: nul(v.eligibility_basis), authorization_reference: nul(v.authorization_reference),
       eligibility_expires_at: v.eligibility_expires_at ? new Date(v.eligibility_expires_at).toISOString() : null,
       price_cents: v.price_cents ? Number(v.price_cents) : null,
+      paused: v.paused === "on",
     };
+    const phone = toE164(v.phone);
+    if (v.phone && !phone) throw new Error("Phone must be a valid US mobile number");
+    patch.phone = phone;
+    // Only record text consent the coach actually gave (application form, hub, or documented verbally/in writing).
+    if (v.sms_consent === "on" && phone) { if (!prev?.sms_opt_in_at) patch.sms_opt_in_at = new Date().toISOString(); }
+    else patch.sms_opt_in_at = null;
     if (prev?.eligibility_status !== v.eligibility_status) patch.eligibility_reviewed_at = new Date().toISOString();
     if (v.photo_url && !/^https:\/\//.test(v.photo_url)) throw new Error("Photo URL must be https");
     if (id) {
@@ -152,6 +164,15 @@ export async function saveCoach(_: Result, fd: FormData): Promise<Result> {
       let slug = base;
       for (let i = 2; await deps.store.getCoachBySlug(slug); i++) slug = `${base}-${i}`;
       newId = (await deps.store.insertCoach({ ...patch, slug, full_name: v.full_name, sport: v.sport })).id;
+    }
+    // Approving a coach immediately emails them the payout-setup link, so they're bookable (and paid instantly) ASAP.
+    const saved = (await deps.store.getCoach(newId))!;
+    if (
+      saved.listing_type === "participating" && saved.verification_status === "verified" && saved.eligibility_status === "approved" &&
+      saved.email && !saved.stripe_transfers_active && !saved.payout_invite_sent_at
+    ) {
+      await sendPayoutInvite(deps, saved);
+      return "Saved — approval + payout-setup email sent to the coach";
     }
     return "Saved";
   }, "/admin/coaches");
@@ -167,6 +188,13 @@ export async function coachAction(_: Result, fd: FormData): Promise<Result> {
     const coach = await deps.store.getCoach(id);
     if (!coach) throw new Error("Not found");
     if (op === "sync_stripe") { const c = await syncAccount(deps, coach); return `Stripe: transfers ${c.stripe_transfers_active ? "active" : "inactive"}, details ${c.stripe_details_submitted ? "submitted" : "missing"}`; }
+    if (op === "send_payout_invite") { await sendPayoutInvite(deps, coach, true); return "Coach hub / payout setup email sent"; }
+    if (op === "toggle_pause") { const c = await setPaused(deps, coach, !coach.paused); return c.paused ? "Paused" : "Accepting requests"; }
+    if (op === "remove_intro") {
+      if (coach.intro_video_path) await deps.storage.remove(coach.intro_video_path).catch(() => {});
+      await deps.store.updateCoach(id, { intro_video_path: null });
+      return "Intro video removed";
+    }
     if (op === "opt_in") { await deps.store.updateCoach(id, { opted_out: false }); return "Coach opted back in (they must have asked). Remove the suppression in email_suppressions if needed."; }
     throw new Error("Unknown action");
   }, `/admin/coaches/${id}`);
@@ -212,6 +240,8 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
       video_retention_days: Math.min(365, Math.max(1, Number(fd.get("video_retention_days")) || 30)),
       require_admin_review: fd.get("require_admin_review") === "on",
       allow_active_college_coaches: fd.get("allow_active_college_coaches") === "on",
+      require_payouts_before_booking: fd.get("require_payouts_before_booking") === "on",
+      show_directory_listings: fd.get("show_directory_listings") === "on",
     });
     return "Settings saved. New prices/commission apply to new requests only.";
   }, "/admin/settings");

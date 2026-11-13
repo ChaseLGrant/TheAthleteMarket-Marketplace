@@ -11,6 +11,7 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
 | Supabase | Postgres + private video storage | You already have Pro (daily backups, large uploads) |
 | Stripe | Checkout, refunds, Connect payouts | Pay-as-you-go |
 | Resend | Transactional email | Free up to 3,000 emails/month |
+| Twilio | Text alerts to coaches (+ order alerts to you) | ~$0.01 per text; you already have an approved account |
 
 ## 1. Supabase (inside your existing project — no extra cost)
 
@@ -68,6 +69,21 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook --forward-connect-t
 3. Create an API key (sending access only) → `RESEND_API_KEY`.
 4. `EMAIL_FROM="The Athlete Market <evaluations@mail.theathletemarket.com>"`, `EMAIL_REPLY_TO=` a real monitored inbox.
 5. Set `COMPANY_POSTAL_ADDRESS` to a real mailing address (CAN-SPAM).
+
+## 3b. Twilio (text alerts)
+
+1. Twilio Console → **Messaging → Services**: use the Messaging Service attached to your approved A2P 10DLC campaign.
+   Copy its SID (starts with `MG`) → `TWILIO_MESSAGING_SERVICE_SID`.
+2. **Account → API keys & tokens**: copy the Account SID (`AC…`) → `TWILIO_ACCOUNT_SID` and the Auth Token → `TWILIO_AUTH_TOKEN`
+   (paste these only into Vercel, never into chat).
+3. `ADMIN_ALERT_PHONE` = your own mobile (+1…) — you'll be texted for every new order, every video awaiting review, and low ratings.
+4. Keep Twilio's default opt-out handling **on** (Messaging Service → Opt-out management). STOP replies are honored by Twilio,
+   and the app marks that coach as opted out the next time it tries to text them.
+5. Your A2P campaign description should match what we send: "Transactional alerts to opted-in coaches about new evaluation requests
+   and deadlines." Opt-in happens on the coach application form or the coach hub (checkbox with STOP/HELP wording); the privacy
+   policy states mobile numbers are never shared for marketing.
+
+If Twilio isn't configured, the app simply skips texts and uses email only.
 
 ## 4. Vercel
 
@@ -148,8 +164,11 @@ generated Open Graph image. After launch: add the property in Google Search Cons
 6. After submitting, the Stripe payment changes to **Succeeded** (captured). Payout setup email → complete Stripe Express onboarding (test mode: use Stripe's test SSN `000-00-0000` and test bank) → transfer appears in Stripe.
 7. Second request → Decline → the Stripe payment shows **Canceled** (no fee) + "You weren't charged" email.
 8. Third request → in Supabase set `expires_at` to the past → call `/api/cron` with the bearer secret → hold released.
-9. Stripe Dashboard → trigger a test dispute (card `4000 0000 0000 0259`) → admin alert + payout held.
-10. Then switch keys to live mode, create live webhook endpoints, and repeat steps 3–7 once with a real card.
+9. Coach hub (link in the coach's email): turn on text alerts with your phone → place another test order → you get a text.
+   Tap "Film won't open?" on the coach page → the family email has a fix link → paste a new link → the coach is re-notified.
+10. After delivery: rate the video, then tap "Get a second coach's take" → details are pre-filled.
+11. Stripe Dashboard → trigger a test dispute (card `4000 0000 0000 0259`) → admin alert + payout held.
+12. Then switch keys to live mode, create live webhook endpoints, and repeat steps 3–7 once with a real card.
 
 ## 10. Monitoring
 

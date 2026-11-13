@@ -33,7 +33,7 @@ export default async function Coaches({ searchParams }: { searchParams: Promise<
       </form>
       <div className="card overflow-x-auto">
         <table className="table-admin">
-          <thead><tr><th>Name</th><th>Sport</th><th>School</th><th>Listing</th><th>Kind</th><th>Identity</th><th>Eligibility</th><th>Price</th><th>Stripe</th><th>Bookable</th><th>Waitlist</th></tr></thead>
+          <thead><tr><th>Name</th><th>Sport</th><th>School</th><th>Listing</th><th>Kind</th><th>Identity</th><th>Eligibility</th><th>Price</th><th>Stripe</th><th>Bookable</th><th>Delivered</th><th>Rating</th><th>Waitlist</th></tr></thead>
           <tbody>
             {list.map((c) => {
               const gate = paidRequestGate(c, settings);
@@ -48,7 +48,9 @@ export default async function Coaches({ searchParams }: { searchParams: Promise<
                   <td><Pill value={c.eligibility_status} /></td>
                   <td>{c.price_cents ? money(c.price_cents) : "—"}</td>
                   <td className="text-xs">{c.stripe_transfers_active ? "✅ active" : c.stripe_account_id ? "⏳ started" : "—"}</td>
-                  <td title={gate.reasons.join("\n")}>{gate.ok ? "✅" : "—"}</td>
+                  <td title={gate.reasons.join("\n")}>{gate.ok ? "✅" : c.paused ? "⏸" : "—"}</td>
+                  <td>{c.delivered_count}</td>
+                  <td>{c.rating_count ? `★ ${(c.rating_sum / c.rating_count).toFixed(1)} (${c.rating_count})` : "—"}</td>
                   <td>{waitlist[c.id] ?? 0}</td>
                 </tr>
               );

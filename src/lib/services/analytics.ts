@@ -34,6 +34,11 @@ export interface Metrics {
   blockedPayouts: number;
   failedRefunds: number;
   openDisputes: number;
+  avgRating: number | null;
+  ratings: number;
+  wouldBuyAgainRate: number | null;
+  secondOpinions: number;
+  filmIssues: number;
 }
 
 const PAID_STATES = new Set(["paid", "coach_notified", "accepted", "submitted", "completed", "declined", "expired", "refunded"]);
@@ -116,6 +121,11 @@ export async function computeMetrics(deps: Deps, windowDays = 30): Promise<Metri
     pendingPayoutCents: all.filter((r) => r.status === "completed" && ["pending", "blocked", "failed", "processing"].includes(r.payout_status)).reduce((s, r) => s + r.coach_payout_cents, 0),
     blockedPayouts: all.filter((r) => r.status === "completed" && r.payout_status === "blocked").length,
     failedRefunds: all.filter((r) => r.refund_status === "failed").length,
+    avgRating: (() => { const rs = inWindow.filter((r) => r.rating); return rs.length ? rs.reduce((s, r) => s + r.rating!, 0) / rs.length : null; })(),
+    ratings: inWindow.filter((r) => r.rating).length,
+    wouldBuyAgainRate: ratio(inWindow.filter((r) => r.would_buy_again === true).length, inWindow.filter((r) => r.would_buy_again != null).length),
+    secondOpinions: paid.filter((r) => r.parent_request_id).length,
+    filmIssues: inWindow.filter((r) => r.film_issue_at || r.film_issue_note).length,
     openDisputes: disputes.filter((d) => !["won", "lost", "warning_closed"].includes(d.status)).length,
   };
 }

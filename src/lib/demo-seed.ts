@@ -54,6 +54,14 @@ export const DEMO_COACHES: Seed[] = [
     credentials: "Former CCCAA pitching coach · Driveline-certified",
     bio: "Pitchers only. Mechanics, tempo, and what a radar reading on your video should look like.",
   },
+  {
+    ...approved, slug: "tre-williams", full_name: "Tre Williams", title: "Former Assistant Coach", school: "Former Bayview College",
+    sport: "Basketball (M)", division: "NAIA", conference: "Sun Demo", state: "FL",
+    email: "tre.williams@example.com", coach_kind: "former_college", price_cents: 3000,
+    eligibility_basis: "Former NAIA assistant; now a skills trainer with no college affiliation.",
+    credentials: "Former NAIA assistant · 8 years · skills trainer",
+    bio: "Guards and wings. Ball-handling, shot prep and what your reel needs in the first 30 seconds.",
+  },
   // Directory-only listings (not participating) — demonstrate the honest "not on the platform" state.
   { slug: "demo-directory-1", full_name: "Alex Turner", title: "Head Coach", school: "Northfield Demo University", sport: "Basketball (W)", division: "NCAA D1", conference: "Midwest Demo", state: "IL", coach_kind: "active_college", is_demo: true },
   { slug: "demo-directory-2", full_name: "Priya Shah", title: "Assistant Coach", school: "Eastbrook Demo College", sport: "Soccer (M)", division: "NCAA D3", conference: "New England Demo", state: "MA", coach_kind: "active_college", is_demo: true },

@@ -41,6 +41,14 @@ export const env = {
   emailReplyTo: () => opt("EMAIL_REPLY_TO"),
   adminAlertEmail: () => opt("ADMIN_ALERT_EMAIL"),
   postalAddress: () => opt("COMPANY_POSTAL_ADDRESS") ?? "The Athlete Market",
+  twilio: () => {
+    const sid = opt("TWILIO_ACCOUNT_SID");
+    const token = opt("TWILIO_AUTH_TOKEN");
+    const service = opt("TWILIO_MESSAGING_SERVICE_SID");
+    const from = opt("TWILIO_FROM_NUMBER");
+    return sid && token && (service || from) ? { sid, token, service, from } : null;
+  },
+  adminAlertPhone: () => opt("ADMIN_ALERT_PHONE"),
   appSecret: () => {
     const s = isDemoMode() ? opt("APP_SECRET") ?? "demo-secret-demo-secret-demo-secret!!" : req("APP_SECRET");
     if (s.length < 32) throw new Error("APP_SECRET must be at least 32 characters.");

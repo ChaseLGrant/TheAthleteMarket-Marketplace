@@ -11,6 +11,8 @@ export interface RequestWhere {
   expiresAfter?: string;
   /** require expires_at <= this ISO timestamp (only expire what is truly overdue) */
   expiresBefore?: string;
+  /** require these columns to be NULL (e.g. "not rated yet") */
+  isNull?: (keyof EvalRequest)[];
 }
 
 export interface RequestFilter {
@@ -34,7 +36,7 @@ export type NewRequest = Omit<
   | "last_error" | "paid_at" | "expires_at" | "coach_notified_at" | "coach_viewed_at" | "accepted_at"
   | "submitted_at" | "completed_at" | "delivered_at" | "declined_at" | "decline_reason" | "expired_at"
   | "refunded_at" | "paid_out_at" | "coach_attested_at" | "last_reminder_at" | "onboarding_email_sent_at"
-  | "purged_at" | "video_deleted_at" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
+  | "purged_at" | "video_deleted_at" | "takeaway_strength" | "takeaway_improve" | "takeaway_next" | "rating" | "would_buy_again" | "rating_comment" | "rated_at" | "film_issue_at" | "film_issue_note" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
 >;
 
 export interface Store {
@@ -46,7 +48,8 @@ export interface Store {
   getCoachByStripeAccount(accountId: string): Promise<Coach | null>;
   findCoachesByEmail(email: string): Promise<Coach[]>;
   /** Public search. `participatingFirst` ordering is applied by implementations. */
-  searchCoaches(s: CoachSearch): Promise<{ coaches: Coach[]; total: number }>;
+  searchCoaches(s: CoachSearch & { includeDirectory?: boolean }): Promise<{ coaches: Coach[]; total: number }>;
+  listParticipatingCoaches(): Promise<Coach[]>;
   listCoachesAdmin(f: { q?: string; listing?: string; eligibility?: string; limit?: number }): Promise<Coach[]>;
   coachFacets(): Promise<{ sports: string[]; conferences: string[] }>;
   insertCoach(c: Partial<Coach> & Pick<Coach, "slug" | "full_name" | "sport">): Promise<Coach>;
@@ -71,6 +74,9 @@ export interface Store {
   finishStripeEvent(id: string, error?: string): Promise<void>;
 
   logEmail(row: Omit<EmailLogRow, "id" | "created_at">): Promise<void>;
+  /** Insert a message log row with a unique dedupe key. Returns false if that key was already claimed (never send twice). */
+  claimMessage(row: Omit<EmailLogRow, "id" | "created_at"> & { dedupe_key: string }): Promise<boolean>;
+  finishMessage(dedupeKey: string, patch: { status: EmailLogRow["status"]; provider_id?: string | null; error?: string | null }): Promise<void>;
   listEmails(f: { request_id?: string; limit?: number }): Promise<EmailLogRow[]>;
   isSuppressed(email: string): Promise<boolean>;
   suppress(email: string, reason: string): Promise<void>;
@@ -96,10 +102,12 @@ export const DEFAULT_SETTINGS: Settings = {
   commission_bps: 0,
   deadline_days: 5,
   max_open_requests_per_coach: 15,
-  require_admin_review: false,
+  require_admin_review: true,
   allow_active_college_coaches: false,
   retention_days: 365,
   video_retention_days: 30,
+  show_directory_listings: false,
+  require_payouts_before_booking: true,
 };
 
 export function escapeLike(s: string): string {

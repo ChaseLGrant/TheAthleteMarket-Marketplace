@@ -4,10 +4,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applicationSchema, fieldErrors, requestSchema } from "@/lib/validation";
 import { createRequestAndCheckout, UserFacingError } from "@/lib/services/lifecycle";
+import { checkFilmLink } from "@/lib/services/experience";
 import { alertAdmin } from "@/lib/services/notify";
 import { clientIp, getDeps } from "@/lib/server";
 import { slugify } from "@/lib/format";
 import { log } from "@/lib/log";
+import { toE164 } from "@/lib/phone";
 
 export interface FormState {
   ok?: boolean;
@@ -23,6 +25,10 @@ export async function submitRequest(_prev: FormState, fd: FormData): Promise<For
   const values = formValues(fd);
   const parsed = requestSchema.safeParse(values);
   if (!parsed.success) return { error: "Please fix the highlighted fields.", fields: fieldErrors(parsed.error), values };
+  // Catch private/broken film links BEFORE payment — the #1 reason an order would fail.
+  const film = await checkFilmLink(parsed.data.filmUrl);
+  if (film.status === "private" || film.status === "not_found")
+    return { error: "The coach won't be able to open your film link.", fields: { filmUrl: film.message ?? "Check your film link." }, values };
   let url: string;
   try {
     const deps = await getDeps();
@@ -53,6 +59,8 @@ export async function submitApplication(_prev: FormState, fd: FormData): Promise
   const deps = await getDeps();
   if (!(await deps.store.rateLimit(`apply:${await clientIp()}`, 3600, 5))) return { error: "Too many applications. Try again later." };
   const a = parsed.data;
+  const phone = toE164(a.phone);
+  if (a.phone && !phone) return { error: "Please fix the highlighted fields.", fields: { phone: "Enter a valid US mobile number" }, values };
   if ((await deps.store.findCoachesByEmail(a.email)).some((c) => c.listing_type === "participating"))
     return { ok: true }; // don't reveal whether an email is registered
   const base = slugify(a.fullName) || "coach";
@@ -70,6 +78,8 @@ export async function submitApplication(_prev: FormState, fd: FormData): Promise
     coach_kind: a.coachKind,
     credentials: a.credentials,
     application_message: a.message,
+    phone,
+    sms_opt_in_at: phone && a.smsConsent === "on" ? new Date().toISOString() : null,
     listing_type: "participating",
     verification_status: "pending",
     eligibility_status: "pending_review",

@@ -7,6 +7,7 @@ import { paidRequestGate, payoutGate } from "@/lib/compliance";
 import { DIVISIONS, SPORTS } from "@/lib/constants";
 import { money } from "@/lib/format";
 import { payoutsUrl } from "@/lib/services/links";
+import { prettyPhone } from "@/lib/phone";
 import { getDeps } from "@/lib/server";
 import type { Coach } from "@/lib/types";
 import { coachAction, saveCoach } from "../../../actions";
@@ -56,6 +57,12 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
           <T n="photo_url" l="Photo URL (https)" v={c.photo_url} />
         </div>
         <T n="credentials" l="Credentials line" v={c.credentials} />
+        <div className="grid gap-4 md:grid-cols-3">
+          <T n="phone" l="Mobile (for text alerts)" v={c.phone ? prettyPhone(c.phone) : ""} t="tel" />
+          <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="sms_consent" defaultChecked={!!c.sms_opt_in_at} className="h-5 w-5 accent-blue" />
+            Coach consented to texts{c.sms_opt_in_at ? ` (${c.sms_opt_in_at.slice(0, 10)})` : ""}{c.sms_opted_out ? " — replied STOP" : ""}</label>
+          <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="paused" defaultChecked={!!c.paused} className="h-5 w-5 accent-blue" />Paused (not bookable)</label>
+        </div>
         <div><label className="label" htmlFor="bio">Bio</label><textarea id="bio" name="bio" rows={3} defaultValue={c.bio ?? ""} className="field" /></div>
         {c.application_message && <Notice title="Application note">{c.application_message}</Notice>}
 
@@ -83,8 +90,12 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
             <h2 className="font-semibold">Stripe Connect payouts</h2>
             <p className="text-sm">Account: {coach.stripe_account_id ?? "not created"} · Transfers {coach.stripe_transfers_active ? "active" : "inactive"} · Details {coach.stripe_details_submitted ? "submitted" : "missing"} · Payouts {coach.stripe_payouts_enabled ? "enabled" : "disabled"}</p>
             {pgate && !pgate.ok && <p className="text-xs text-muted">Payout gate: {pgate.reasons.join(" ")}</p>}
-            <p className="break-all text-xs text-muted">Coach payout setup link (send if they lost the email): {payoutsUrl(coach)}</p>
+            <p className="break-all text-xs text-muted">Coach hub link (payouts, pause, intro video): {payoutsUrl(coach)}</p>
+            <p className="text-xs text-muted">Payout-setup email: {coach.payout_invite_sent_at ? `sent ${coach.payout_invite_sent_at.slice(0, 10)}` : "not sent (sent automatically on approval)"}</p>
+            <p className="text-xs text-muted">Delivered {coach.delivered_count} · rating {coach.rating_count ? `${(coach.rating_sum / coach.rating_count).toFixed(1)} (${coach.rating_count})` : "—"}</p>
             <div className="flex flex-wrap gap-2">
+              <ActionForm action={coachAction} fields={{ id, op: "send_payout_invite" }} label="Email coach hub link" />
+              {coach.intro_video_path && <ActionForm action={coachAction} fields={{ id, op: "remove_intro" }} label="Remove intro video" tone="danger" confirm="Remove this coach's public intro video?" />}
               {coach.stripe_account_id && <ActionForm action={coachAction} fields={{ id, op: "sync_stripe" }} label="Refresh from Stripe" />}
               {coach.opted_out && <ActionForm action={coachAction} fields={{ id, op: "opt_in" }} label="Re-enable emails" confirm="Only do this if the coach asked to opt back in." />}
             </div>

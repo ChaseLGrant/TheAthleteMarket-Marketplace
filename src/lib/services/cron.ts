@@ -6,7 +6,9 @@ import { log } from "../log";
 import { videoDeletable } from "../retention";
 import { coachDeclineUrl, coachReviewUrl, unsubscribeUrl } from "./links";
 import { sendEmail } from "./notify";
-import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest } from "./lifecycle";
+import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest, textCoach } from "./lifecycle";
+import { sendWeeklySummaries } from "./experience";
+import { sms as smsText } from "../email/templates";
 
 const HOUR = 3_600_000;
 
@@ -18,7 +20,7 @@ export async function runCron(deps: Deps) {
   const now = deps.now();
   const nowIso = now.toISOString();
   const settings = await deps.store.getSettings();
-  const out = { notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
+  const out = { notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try { await fn(); } catch (e) { out.errors++; log("error", `cron:${label}`, { error: String(e) }); }
   };
@@ -102,9 +104,13 @@ export async function runCron(deps: Deps) {
         coachId: coach.id,
         marketing: true,
       });
+      await textCoach(deps, coach, r, smsText.coachReminder(r, coachReviewUrl(r), Math.max(1, Math.round(hoursLeft / 24))), `coach-sms-reminder-${r.id}-${n}`, "coach_reminder");
       out.reminders++;
     });
   }
+
+  // 5b. Weekly "you earned $X" email (each coach at most once every ~7 days, only if they were paid).
+  await safe("weekly", async () => { out.weeklySummaries = await sendWeeklySummaries(deps); });
 
   // 6. Abandoned checkouts (Stripe also sends checkout.session.expired; this is the backstop).
   for (const r of await deps.store.listRequests({ status: ["awaiting_payment"] })) {

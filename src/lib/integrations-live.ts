@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { env } from "./env";
-import type { AccountStatus, CheckoutArgs, EmailMessage, Mailer, PaymentDetails, Payments, VideoStorage } from "./integrations";
+import { SmsOptedOutError, type AccountStatus, type CheckoutArgs, type EmailMessage, type Mailer, type PaymentDetails, type Payments, type Sms, type SmsMessage, type VideoStorage } from "./integrations";
 import { supabaseAdmin } from "./store-supabase";
 
 let stripeClient: Stripe | null = null;
@@ -220,6 +220,30 @@ export class ResendMailer implements Mailer {
     const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!res.ok || !body.id) throw new Error(`Resend ${res.status}: ${body.message ?? "unknown error"}`);
     return { id: body.id };
+  }
+}
+
+/** Twilio Programmable Messaging (A2P 10DLC-registered Messaging Service recommended). */
+export class TwilioSms implements Sms {
+  get enabled() { return !!env.twilio(); }
+  async send(m: SmsMessage) {
+    const t = env.twilio();
+    if (!t) throw new Error("Twilio is not configured");
+    const body = new URLSearchParams({ To: m.to, Body: m.body });
+    if (t.service) body.set("MessagingServiceSid", t.service);
+    else body.set("From", t.from!);
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${t.sid}/Messages.json`, {
+      method: "POST",
+      headers: {
+        Authorization: "Basic " + Buffer.from(`${t.sid}:${t.token}`).toString("base64"),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    const data = (await res.json().catch(() => ({}))) as { sid?: string; code?: number; message?: string };
+    if (data.code === 21610) throw new SmsOptedOutError("Recipient replied STOP");
+    if (!res.ok || !data.sid) throw new Error(`Twilio ${res.status}: ${data.code ?? ""} ${data.message ?? "unknown error"}`);
+    return { id: data.sid };
   }
 }
 

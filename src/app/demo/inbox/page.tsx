@@ -30,6 +30,16 @@ export default async function DemoInbox() {
         </div>
       </div>
       <p className="mt-1 text-sm text-muted">Simulated clock offset: {Math.round(demo.clockOffsetMs / 3_600_000)}h. Links in emails point at this local app.</p>
+      {demo.sms.sent.length > 0 && (
+        <div className="card mt-6 p-4">
+          <h2 className="font-semibold">📱 Text messages ({demo.sms.sent.length})</h2>
+          <ul className="mt-2 space-y-2 text-sm">
+            {demo.sms.sent.map((m) => (
+              <li key={m.id} className="rounded-xl bg-surface p-3"><span className="font-mono text-xs text-muted">{m.to}</span><br />{m.body.replaceAll(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000", "")}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="mt-6 space-y-6">
         {demo.mailer.sent.map((m) => (
           <details key={m.id} className="card overflow-hidden" open={m === demo.mailer.sent[0]}>

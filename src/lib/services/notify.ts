@@ -1,6 +1,7 @@
 import type { Deps } from "../deps";
 import { env } from "../env";
 import { adminAlert, type Rendered } from "../email/templates";
+import { SmsOptedOutError } from "../integrations";
 import { log } from "../log";
 import { unsubscribeUrl } from "./links";
 
@@ -70,4 +71,38 @@ export async function alertAdmin(deps: Deps, title: string, lines: string[], url
   } catch (e) {
     log("error", "[alert] failed to email admin", { error: String(e) });
   }
+}
+
+/**
+ * Send one text. Never sent twice for the same dedupeKey (claimed in the log before sending).
+ * Never throws: SMS is a fast-lane on top of email, never the only channel.
+ * Returns "opted_out" when the person replied STOP (caller should stop texting them).
+ */
+export async function sendSms(
+  deps: Deps,
+  a: { to: string | null; body: string; template: string; dedupeKey: string; requestId?: string | null; coachId?: string | null },
+): Promise<"sent" | "skipped" | "opted_out" | "failed"> {
+  if (!a.to || !deps.sms.enabled) return "skipped";
+  const claimed = await deps.store
+    .claimMessage({
+      channel: "sms", dedupe_key: a.dedupeKey, request_id: a.requestId ?? null, coach_id: a.coachId ?? null,
+      to_email: a.to, template: a.template, subject: a.body.slice(0, 120), provider_id: null, status: "failed", error: "pending",
+    })
+    .catch((e) => { log("error", "sms claim failed", { error: String(e) }); return false; });
+  if (!claimed) return "skipped";
+  try {
+    const { id } = await deps.sms.send({ to: a.to, body: a.body });
+    await deps.store.finishMessage(a.dedupeKey, { status: "sent", provider_id: id, error: null });
+    return "sent";
+  } catch (e) {
+    const opted = e instanceof SmsOptedOutError;
+    await deps.store.finishMessage(a.dedupeKey, { status: opted ? "suppressed" : "failed", error: String(e).slice(0, 300) }).catch(() => {});
+    log(opted ? "info" : "warn", "sms not sent", { template: a.template, error: String(e) });
+    return opted ? "opted_out" : "failed";
+  }
+}
+
+/** Text the founder (ADMIN_ALERT_PHONE) — for hands-on handling of the first orders. */
+export async function textAdmin(deps: Deps, body: string, dedupeKey: string) {
+  await sendSms(deps, { to: env.adminAlertPhone() ?? null, body, template: "admin_sms", dedupeKey });
 }

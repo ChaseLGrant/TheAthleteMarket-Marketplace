@@ -6,9 +6,11 @@ import { WaitlistForm } from "@/components/waitlist-form";
 import { availabilityLabel } from "@/lib/compliance";
 import { money } from "@/lib/format";
 import { getDeps, isBot } from "@/lib/server";
+import { Stars } from "@/components/ui";
+import { deliveryBadge } from "@/lib/services/coach-stats";
 
 export const dynamic = "force-dynamic";
-type P = { params: Promise<{ slug: string }> };
+type P = { params: Promise<{ slug: string }>; searchParams?: Promise<{ from?: string }> };
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const { slug } = await params;
@@ -25,12 +27,16 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   };
 }
 
-export default async function CoachPage({ params }: P) {
+export default async function CoachPage({ params, searchParams }: P) {
   const { slug } = await params;
+  const from = (await searchParams)?.from?.slice(0, 200);
   const deps = await getDeps();
   const coach = await deps.store.getCoachBySlug(slug);
   if (!coach || (coach.listing_type === "participating" && coach.verification_status !== "verified")) notFound();
   const settings = await deps.store.getSettings();
+  if (coach.listing_type === "directory" && !settings.show_directory_listings) notFound();
+  const introSrc = coach.intro_video_path ? await deps.storage.playbackUrl(coach.intro_video_path, 6 * 3600).catch(() => null) : null;
+  const speed = deliveryBadge(coach);
   const status = availabilityLabel(coach, settings);
   if (!(await isBot())) deps.store.track("coach_view", coach.id).catch(() => {});
 
@@ -44,7 +50,8 @@ export default async function CoachPage({ params }: P) {
             <div className="min-w-0">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{coach.full_name}</h1>
               <p className="text-muted">{[coach.title, coach.school].filter(Boolean).join(" · ")}</p>
-              <div className="mt-2">{status === "directory" ? <DirectoryBadge /> : <VerifiedBadge />}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-3">{status === "directory" ? <DirectoryBadge /> : <VerifiedBadge />}<Stars coach={coach} /></div>
+              {speed && <p className="mt-1.5 text-sm font-medium text-success">⚡ {speed}</p>}
             </div>
           </div>
           <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -55,6 +62,12 @@ export default async function CoachPage({ params }: P) {
               </div>
             ))}
           </dl>
+          {introSrc && (
+            <div className="mt-6">
+              <p className="mb-2 text-sm font-semibold text-navy">Meet {coach.full_name.split(" ")[0]}</p>
+              <video src={introSrc} controls playsInline preload="metadata" className="aspect-video w-full rounded-xl bg-black" />
+            </div>
+          )}
           {coach.credentials && <p className="mt-6 text-sm font-semibold text-navy">{coach.credentials}</p>}
           {coach.bio && <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-muted">{coach.bio}</p>}
           {status === "directory" && (
@@ -78,7 +91,7 @@ export default async function CoachPage({ params }: P) {
                 <li>💳 Card charged only when delivered</li>
                 <li>🔒 Private link — no account needed</li>
               </ul>
-              <Link href={`/coaches/${coach.slug}/request`} className="btn-primary mt-5 w-full">Request evaluation</Link>
+              <Link href={`/coaches/${coach.slug}/request${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-primary mt-5 w-full">Request evaluation</Link>
               <p className="mt-3 text-center text-xs text-subtle">Feedback only — not a recruiting offer.</p>
             </div>
           ) : status === "directory" ? (
@@ -90,7 +103,7 @@ export default async function CoachPage({ params }: P) {
             </div>
           ) : (
             <div className="card p-6">
-              <p className="font-semibold">Not taking requests right now</p>
+              <p className="font-semibold">{coach.paused ? `${coach.full_name.split(" ")[0]} is taking a short break` : "Not taking requests right now"}</p>
               <p className="mt-1 text-sm text-muted">Check back soon, or choose another evaluator.</p>
               <Link href={`/coaches?available=1&sport=${encodeURIComponent(coach.sport)}`} className="btn-primary mt-4 w-full">See available coaches</Link>
             </div>

@@ -27,6 +27,8 @@ export interface Settings {
   allow_active_college_coaches: boolean;
   retention_days: number;
   video_retention_days: number;
+  show_directory_listings: boolean;
+  require_payouts_before_booking: boolean;
 }
 
 export interface Coach {
@@ -59,6 +61,17 @@ export interface Coach {
   opted_out: boolean;
   is_demo: boolean;
   application_message: string | null;
+  phone: string | null;
+  sms_opt_in_at: string | null;
+  sms_opted_out: boolean;
+  paused: boolean;
+  intro_video_path: string | null;
+  delivered_count: number;
+  delivery_hours_total: number;
+  rating_sum: number;
+  rating_count: number;
+  payout_invite_sent_at: string | null;
+  last_summary_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -124,6 +137,16 @@ export interface EvalRequest {
   payout_attempts: number;
   purged_at: string | null;
   video_deleted_at: string | null;
+  takeaway_strength: string | null;
+  takeaway_improve: string | null;
+  takeaway_next: string | null;
+  rating: number | null;
+  would_buy_again: boolean | null;
+  rating_comment: string | null;
+  rated_at: string | null;
+  film_issue_at: string | null;
+  film_issue_note: string | null;
+  parent_request_id: string | null;
   video_path: string | null;
   video_mime: string | null;
   video_size_bytes: number | null;
@@ -148,6 +171,8 @@ export interface RequestEvent {
 
 export interface EmailLogRow {
   id: number;
+  channel?: "email" | "sms";
+  dedupe_key?: string | null;
   request_id: string | null;
   coach_id: string | null;
   to_email: string;

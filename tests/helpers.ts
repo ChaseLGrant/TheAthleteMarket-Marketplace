@@ -1,5 +1,5 @@
 import { MemoryStore } from "@/lib/store-memory";
-import { FakeMailer, FakePayments, FakeVideoStorage } from "@/lib/integrations-demo";
+import { FakeMailer, FakePayments, FakeSms, FakeVideoStorage } from "@/lib/integrations-demo";
 import type { Deps } from "@/lib/deps";
 import type { Coach } from "@/lib/types";
 import type { RequestInput } from "@/lib/validation";
@@ -15,8 +15,12 @@ export function makeDeps() {
     payments: new FakePayments(),
     mailer: new FakeMailer(),
     storage: new FakeVideoStorage(),
+    sms: new FakeSms(),
     now: () => now,
   };
+  // Most tests exercise the raw lifecycle; dedicated tests cover review + payout-before-booking.
+  deps.store.settings.require_admin_review = false;
+  deps.store.settings.require_payouts_before_booking = false;
   const advance = (hours: number) => { now = new Date(now.getTime() + hours * 3_600_000); };
   return { deps: deps as Deps & typeof deps, advance };
 }
@@ -58,6 +62,7 @@ export function input(over: Partial<RequestInput> = {}): RequestInput {
     company: undefined,
     utmSource: null,
     utmCampaign: null,
+    fromToken: null,
     ...over,
   };
 }

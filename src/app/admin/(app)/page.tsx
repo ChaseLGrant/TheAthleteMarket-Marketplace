@@ -78,6 +78,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <Kpi label="Coach payouts" value={money(m.coachPayoutsCents)} sub={`${money(m.pendingPayoutCents)} owed / pending`} />
         <Kpi label="Profile views" value={String(m.coachViews)} sub={`${m.formViews} form views`} />
         <Kpi label="View → paid" value={pct(m.coachViews ? m.paid / m.coachViews : null)} sub="Profile view to payment" />
+        <Kpi label="Family rating" value={m.avgRating == null ? "—" : `★ ${m.avgRating.toFixed(1)}`} sub={`${m.ratings} ratings · ${pct(m.wouldBuyAgainRate)} would buy again`} />
+        <Kpi label="Second opinions" value={String(m.secondOpinions)} sub="Repeat orders via “second coach” link" />
+        <Kpi label="Film link issues" value={String(m.filmIssues)} sub="Coach couldn't open the film" />
       </section>
 
       <section className="card overflow-x-auto">

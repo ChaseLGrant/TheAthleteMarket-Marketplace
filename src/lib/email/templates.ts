@@ -52,6 +52,70 @@ function table(rows: string[]) {
 }
 const p = (html: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:${NAVY};">${html}</p>`;
 
+function takeawaysHtml(req: EvalRequest): string {
+  const items = [["Top strength", req.takeaway_strength], ["Work on", req.takeaway_improve], ["Next step", req.takeaway_next]].filter(([, v]) => v);
+  if (!items.length) return "";
+  return `<div style="margin:0 0 14px;padding:14px 16px;background:#F4F6FB;border-radius:12px;">` +
+    items.map(([k, v]) => `<p style="margin:0 0 6px;font-size:14px;line-height:1.5;color:${NAVY};"><strong>${esc(k)}:</strong> ${esc(v)}</p>`).join("") +
+    `</div>`;
+}
+
+export function coachWelcome(a: { coach: Coach; hubUrl: string; postalAddress: string }): Rendered {
+  const html = layout({
+    preheader: "You're approved. One 3-minute step so every evaluation pays you instantly.",
+    heading: `You're approved, Coach ${a.coach.full_name.split(" ").slice(-1)[0]}`,
+    bodyHtml:
+      p(`Welcome to The Athlete Market. Before families can book you, finish a one-time <strong>3-minute payout setup with Stripe</strong> — that way every evaluation you deliver pays you automatically, right away.`) +
+      p(`Stripe verifies your identity and collects your bank details directly. We never see your bank login or account number.`) +
+      p(`Your coach hub is also where you can <strong>pause requests</strong> when you're busy and <strong>record a short intro video</strong> for your profile (profiles with a video get far more requests).`),
+    cta: { label: "Open my coach hub", url: a.hubUrl },
+    postalAddress: a.postalAddress,
+  });
+  return { subject: "You're approved — finish payout setup (3 min)", html, text: `You're approved! Finish payout setup and record your intro: ${a.hubUrl}\n${a.postalAddress}` };
+}
+
+export function familyFilmIssue(a: { req: EvalRequest; coach: Coach; fixUrl: string; postalAddress: string }): Rendered {
+  const html = layout({
+    preheader: "The coach couldn't open your film link. It takes 30 seconds to fix.",
+    heading: "Quick fix needed: your film link",
+    bodyHtml:
+      p(`${esc(a.coach.full_name)} tried to watch ${esc(a.req.athlete_name)}'s film but <strong>couldn't open the link</strong> — it's usually set to private.`) +
+      (a.req.film_issue_note ? p(`<span style="color:${MUTED};">Coach's note: “${esc(a.req.film_issue_note)}”</span>`) : "") +
+      p(`Tap below to paste a working link. You still haven't been charged, and if it isn't fixed in time the hold is simply released.`),
+    cta: { label: "Fix my film link", url: a.fixUrl },
+    footerHtml: `Reference ${esc(a.req.ref)}.`,
+    postalAddress: a.postalAddress,
+  });
+  return { subject: `Action needed: the coach couldn't open your film (${a.req.ref})`, html, text: `${a.coach.full_name} couldn't open your film link. Fix it here: ${a.fixUrl}\n${a.postalAddress}` };
+}
+
+export function coachWeekly(a: { coach: Coach; count: number; earnedCents: number; openCount: number; hubUrl: string; postalAddress: string }): Rendered {
+  const html = layout({
+    preheader: `You earned ${money(a.earnedCents)} this week.`,
+    heading: `You earned ${money(a.earnedCents)} this week`,
+    bodyHtml:
+      p(`Thanks for delivering <strong>${a.count} evaluation${a.count === 1 ? "" : "s"}</strong> this week. Payments are on their way to your bank on Stripe's schedule.`) +
+      (a.openCount ? p(`You have <strong>${a.openCount} open request${a.openCount === 1 ? "" : "s"}</strong> waiting.`) : ""),
+    cta: { label: a.openCount ? "See open requests" : "Open my coach hub", url: a.hubUrl },
+    postalAddress: a.postalAddress,
+  });
+  return { subject: `You earned ${money(a.earnedCents)} this week`, html, text: `You earned ${money(a.earnedCents)} this week (${a.count} evaluations). Hub: ${a.hubUrl}` };
+}
+
+/** Text messages: short, branded, always with opt-out wording. */
+export const sms = {
+  coachNewRequest: (req: EvalRequest, url: string) =>
+    `The Athlete Market: New ${money(req.coach_payout_cents)} evaluation request — ${req.athlete_name}, ${req.position}, ${req.grad_year}. Record by ${dateOnly(req.expires_at)}: ${url} Reply STOP to opt out.`,
+  coachReminder: (req: EvalRequest, url: string, daysLeft: number) =>
+    `The Athlete Market: ${daysLeft} day${daysLeft === 1 ? "" : "s"} left to record ${req.athlete_name}'s evaluation (${money(req.coach_payout_cents)}): ${url} Reply STOP to opt out.`,
+  coachFilmUpdated: (req: EvalRequest, url: string) =>
+    `The Athlete Market: ${req.athlete_name}'s family sent a new film link. Record here: ${url}`,
+  adminNewOrder: (req: EvalRequest, coach: Coach) =>
+    `TAM: New order ${req.ref} — ${coach.full_name} ← ${req.athlete_name} (${req.sport}), ${money(req.price_cents)} held.`,
+  adminReview: (req: EvalRequest) => `TAM: Video for ${req.ref} is waiting for your review.`,
+  adminLowRating: (req: EvalRequest, rating: number) => `TAM: ${req.ref} was rated ${rating}/5. Check the admin page.`,
+};
+
 export type RefundWhy = "declined" | "expired" | "unavailable" | "admin";
 
 export interface Rendered {
@@ -65,18 +129,21 @@ const NO_PROMISE =
 
 export function coachInvite(a: {
   req: EvalRequest; coach: Coach; reviewUrl: string; declineUrl: string; unsubscribeUrl: string;
-  postalAddress: string; reminder?: { daysLeft: number };
+  postalAddress: string; reminder?: { daysLeft: number }; hubUrl?: string; otherOpen?: number; filmUpdated?: boolean;
 }): Rendered {
   const { req, coach } = a;
   const pay = money(req.coach_payout_cents);
   const deadline = dateOnly(req.expires_at);
-  const subject = a.reminder
+  const subject = a.filmUpdated
+    ? `Updated film link: ${req.athlete_name} · ${pay}`
+    : a.reminder
     ? `Reminder: ${req.athlete_name}'s evaluation (${pay}) — ${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left`
     : `New paid evaluation request: ${req.athlete_name} · ${req.position} · ${pay}`;
   const html = layout({
     preheader: `${req.athlete_name} (${req.grad_year} ${req.position}) asked for a 30–60s video evaluation. You earn ${pay}.`,
     heading: a.reminder ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left to record` : `Coach ${coach.full_name.split(" ").slice(-1)[0]}, you have a paid evaluation request`,
     bodyHtml:
+      (a.filmUpdated ? p(`<strong>The family sent a new film link</strong> — thanks for flagging it. Everything else is the same.`) : "") +
       p(`A family has asked for your honest feedback on their highlight film. Record a <strong>30–60 second video</strong> right from your phone's browser — no account, no app, no password.`) +
       table([
         row("Athlete", esc(req.athlete_name)),
@@ -86,10 +153,11 @@ export function coachInvite(a: {
         row("You receive", `<span style="color:#0A7A3E;">${pay}</span>`),
         row("Respond by", esc(deadline)),
       ]) +
-      p(`<span style="font-size:13px;color:${MUTED};">${esc(NO_PROMISE)} Payment is sent to your bank via Stripe after you submit and finish a short one-time payout setup. If you decline or don't respond by the deadline, the family is simply never charged.</span>`),
+      p(`<span style="font-size:13px;color:${MUTED};">${esc(NO_PROMISE)} Payment is sent automatically via Stripe as soon as your video is delivered. If you decline or don't respond by the deadline, the family is simply never charged.</span>`) +
+      (a.otherOpen && a.hubUrl ? p(`You have <strong>${a.otherOpen} other open request${a.otherOpen === 1 ? "" : "s"}</strong>. <a href="${esc(a.hubUrl)}" style="color:${BLUE};">See them all</a>.`) : ""),
     cta: { label: "Review & Record", url: a.reviewUrl },
     secondary: { label: "Decline this request", url: a.declineUrl },
-    footerHtml: `You received this because a family requested an evaluation from you on The Athlete Market. Participation is entirely optional. <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
+    footerHtml: `You received this because a family requested an evaluation from you on The Athlete Market. Participation is entirely optional.${a.hubUrl ? ` Busy? <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause new requests</a>.` : ""} <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
     postalAddress: a.postalAddress,
   });
   const text = [
@@ -136,7 +204,7 @@ export function purchaserReceipt(a: { req: EvalRequest; coach: Coach; postalAddr
   return { subject, html, text };
 }
 
-export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl: string; availableUntil: Date | null; postalAddress: string }): Rendered {
+export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl: string; availableUntil: Date | null; postalAddress: string; secondOpinionUrl?: string }): Rendered {
   const until = a.availableUntil ? dateOnly(a.availableUntil.toISOString()) : null;
   const { req, coach } = a;
   const subject = `${coach.full_name} sent ${req.athlete_name.split(" ")[0]}'s video evaluation`;
@@ -145,8 +213,10 @@ export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl
     heading: "Your video evaluation is ready",
     bodyHtml:
       p(`<strong>${esc(coach.full_name)}</strong> recorded a personal evaluation of ${esc(req.athlete_name)}'s film. Tap below to watch it — the link is private to you, so please don't post it publicly.`) +
+      takeawaysHtml(req) +
       (until ? p(`<strong>Download it to keep it.</strong> For privacy, the video is automatically deleted after <strong>${esc(until)}</strong>. Use the download button on the video page.`) : ""),
     cta: { label: "Watch the evaluation", url: a.videoUrl },
+    secondary: a.secondOpinionUrl ? { label: "Get a second coach's take →", url: a.secondOpinionUrl } : undefined,
     footerHtml: `Reference ${esc(req.ref)}. This link is private; anyone with it can watch the video. Reply to this email to have it revoked.`,
     postalAddress: a.postalAddress,
   });

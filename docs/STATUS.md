@@ -4,12 +4,14 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 
 ## Verified in this repo
 
-* **47 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
+* **70 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
   lifecycle against an in-memory database with simulated Stripe and email: duplicate webhooks, concurrent payouts (exactly one
   transfer), late submissions rejected after the deadline, expiry → single refund, decline → single refund, failed refund retried
   by cron, refund blocked after payout, dispute holds payout until won, opt-out refunds open requests, coach capacity, rate limits, and the card-hold model: coach never emailed without a successful
   hold, charge only on submit, declines/expiries cost $0 in fees, failed charge withholds the video and coach payout until
-  retried, deadline clamped before the hold expires, already-lapsed holds close cleanly, and video auto-deletion after 30 days (kept during open chargebacks).
+  retried, deadline clamped before the hold expires, already-lapsed holds close cleanly, and video auto-deletion after 30 days (kept during open chargebacks); plus coach texts (consent-only, STOP handling, never
+  sent twice), founder order texts, film-link checking + family fix flow, written takeaways, ratings (counted once), second-opinion
+  prefill (forged links ignored), pause, intro videos, payout setup before booking, weekly earnings emails.
 * **Production build** succeeds (Next.js 16, TypeScript strict).
 * **End-to-end browser run** in demo mode (Chromium, iPhone 13 emulation, fake camera): search, directory-listing block,
   form validation, checkout, coach email link, in-browser recording, upload with progress, family playback, Stripe onboarding
@@ -27,6 +29,8 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 | Playback of WebM recordings on older iPhones | Recorder prefers MP4 (Safari, Chrome 126+ record MP4); some Android/Firefox browsers record WebM, which iOS before 17.4 may not play | If it appears in testing, add server-side transcoding (Mux or Cloudflare Stream) |
 | Stripe manual capture + `capture_before` | Needs Stripe keys | Smoke test §9.3/§9.6/§9.7: payment goes Uncaptured → Succeeded or Canceled |
 | Vercel daily cron | Needs deployment | Check Vercel → Cron Jobs after deploy |
+| Twilio texts | Needs your Twilio keys | Smoke test §9.9 |
+| Film-link check against live YouTube/Vimeo/Drive | This sandbox can't reach those sites; tested with simulated responses | Paste a private YouTube link in the form; it should be flagged before checkout |
 
 ## Known limitations / next steps
 

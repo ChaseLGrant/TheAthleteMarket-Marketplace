@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import type Stripe from "stripe";
-import type { AccountStatus, CheckoutArgs, EmailMessage, Mailer, PaymentDetails, Payments, VideoStorage } from "./integrations";
+import { SmsOptedOutError, type AccountStatus, type CheckoutArgs, type EmailMessage, type Mailer, type PaymentDetails, type Payments, type Sms, type SmsMessage, type VideoStorage } from "./integrations";
 import { estimateStripeFee } from "./pricing";
 
 /**
@@ -124,6 +124,20 @@ export class FakeMailer implements Mailer {
     const id = `em_demo_${this.sent.length + 1}`;
     this.sent.unshift({ ...m, id, at: new Date().toISOString() });
     if (m.idempotencyKey) this.idem.set(m.idempotencyKey, id);
+    return { id };
+  }
+}
+
+export class FakeSms implements Sms {
+  enabled = true;
+  sent: (SmsMessage & { id: string; at: string })[] = [];
+  optedOut = new Set<string>();
+  fail = false;
+  async send(m: SmsMessage) {
+    if (this.optedOut.has(m.to)) throw new SmsOptedOutError("Recipient replied STOP");
+    if (this.fail) throw new Error("Simulated SMS failure");
+    const id = `SM_demo_${this.sent.length + 1}`;
+    this.sent.unshift({ ...m, id, at: new Date().toISOString() });
     return { id };
   }
 }

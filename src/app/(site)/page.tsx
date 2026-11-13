@@ -26,7 +26,7 @@ const FAQ = [
   },
   {
     q: "Who are the coaches?",
-    a: "Paid requests are only available for evaluators we've verified and approved under our eligibility policy — for example former college coaches and independent evaluators. Some coaches appear as directory listings from public information only; they are not on the platform and can't be booked.",
+    a: "Paid requests are only available for evaluators we've verified and approved under our eligibility policy — for example former college coaches and independent evaluators. We only list coaches who have joined.",
   },
   {
     q: "Do I need an account?",

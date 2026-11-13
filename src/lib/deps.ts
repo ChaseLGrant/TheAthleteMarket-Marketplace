@@ -1,5 +1,5 @@
 import { isDemoMode } from "./env";
-import type { Mailer, Payments, VideoStorage } from "./integrations";
+import type { Mailer, Payments, Sms, VideoStorage } from "./integrations";
 import type { Store } from "./store";
 
 export interface Deps {
@@ -7,6 +7,7 @@ export interface Deps {
   payments: Payments;
   mailer: Mailer;
   storage: VideoStorage;
+  sms: Sms;
   now: () => Date;
 }
 
@@ -16,6 +17,7 @@ type DemoBundle = Deps & {
   payments: import("./integrations-demo").FakePayments;
   mailer: import("./integrations-demo").FakeMailer;
   storage: import("./integrations-demo").FakeVideoStorage;
+  sms: import("./integrations-demo").FakeSms;
 };
 
 const g = globalThis as unknown as { __tamDemo?: Promise<DemoBundle>; __tamLive?: Deps };
@@ -36,8 +38,17 @@ export async function getDemo(): Promise<DemoBundle> {
         payments: new demo.FakePayments(),
         mailer: new demo.FakeMailer(),
         storage: new demo.FakeVideoStorage(),
+        sms: new demo.FakeSms(),
         now: () => new Date(Date.now() + bundle.clockOffsetMs),
       };
+      // Demo coaches have already finished payout setup (as real coaches will, at sign-up),
+      // and videos are delivered instantly so the demo can be clicked straight through.
+      await store.updateSettings({ require_admin_review: false });
+      for (const c of await store.listParticipatingCoaches()) {
+        const { id } = await bundle.payments.createConnectAccount({ coachId: c.id, email: c.email ?? "", name: c.full_name });
+        bundle.payments.completeOnboarding(id);
+        await store.updateCoach(c.id, { stripe_account_id: id, stripe_transfers_active: true, stripe_details_submitted: true, stripe_payouts_enabled: true });
+      }
       return bundle;
     })();
   }
@@ -53,6 +64,7 @@ export async function getDeps(): Promise<Deps> {
       payments: new live.StripePayments(),
       mailer: new live.ResendMailer(),
       storage: new live.SupabaseVideoStorage(),
+      sms: new live.TwilioSms(),
       now: () => new Date(),
     };
   }

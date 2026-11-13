@@ -1,27 +1,44 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Notice } from "@/components/ui";
+import { revalidatePath } from "next/cache";
+import { Recorder } from "@/components/recorder";
+import { Notice, Stars } from "@/components/ui";
 import { env } from "@/lib/env";
-import { money } from "@/lib/format";
+import { dateOnly, money } from "@/lib/format";
+import { prettyPhone, toE164 } from "@/lib/phone";
 import { resolvePayoutsLink } from "@/lib/services/access";
+import { setPaused } from "@/lib/services/experience";
+import { deliveryBadge } from "@/lib/services/coach-stats";
+import { coachReviewUrl } from "@/lib/services/links";
 import { retryPayoutsForCoach, startOnboarding, syncAccount } from "@/lib/services/lifecycle";
 import { getDeps } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
-type P = { params: Promise<{ token: string }>; searchParams: Promise<{ returned?: string }> };
+type P = { params: Promise<{ token: string }>; searchParams: Promise<{ returned?: string; sms?: string }> };
 
-export default async function PayoutsPage({ params, searchParams }: P) {
+const SMS_CONSENT =
+  "I agree to receive text messages from The Athlete Market about new evaluation requests and deadlines. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Consent isn't required to participate.";
+
+/** The coach's private hub (magic link from their emails — no account). */
+export default async function CoachHub({ params, searchParams }: P) {
   const { token } = await params;
-  const { returned } = await searchParams;
+  const { returned, sms } = await searchParams;
   const deps = await getDeps();
   let coach = await resolvePayoutsLink(deps, token);
   if (!coach) notFound();
   if (coach.stripe_account_id) coach = await syncAccount(deps, coach);
   if (returned && coach.stripe_transfers_active) await retryPayoutsForCoach(deps, coach.id);
 
-  const owed = (await deps.store.listRequests({ coach_id: coach.id, status: ["completed"] }))
-    .filter((r) => r.payout_status !== "paid" && r.payout_status !== "reversed")
-    .reduce((s, r) => s + r.coach_payout_cents, 0);
+  const all = await deps.store.listRequests({ coach_id: coach.id, limit: 200 });
+  const now = deps.now();
+  const open = all.filter((r) => ["paid", "coach_notified", "accepted"].includes(r.status) && r.expires_at && new Date(r.expires_at) > now);
+  const owed = all.filter((r) => r.status === "completed" && r.payout_status !== "paid" && r.payout_status !== "reversed").reduce((s, r) => s + r.coach_payout_cents, 0);
+  const earned = all.filter((r) => r.payout_status === "paid").reduce((s, r) => s + r.coach_payout_cents, 0);
   const ready = coach.stripe_transfers_active && coach.stripe_details_submitted;
+  const introSrc = coach.intro_video_path ? await deps.storage.playbackUrl(coach.intro_video_path, 3600).catch(() => null) : null;
+  const speed = deliveryBadge(coach);
+  const first = coach.full_name.split(" ")[0];
+  const self = `/coach/payouts/${token}`;
 
   async function continueToStripe() {
     "use server";
@@ -29,37 +46,148 @@ export default async function PayoutsPage({ params, searchParams }: P) {
     const c = await resolvePayoutsLink(d, token);
     if (!c) return;
     const base = `${env.siteUrl()}/coach/payouts/${token}`;
-    const link = ready && c.stripe_account_id
+    const isReady = c.stripe_transfers_active && c.stripe_details_submitted;
+    const link = isReady && c.stripe_account_id
       ? await d.payments.createDashboardLink(c.stripe_account_id)
       : await startOnboarding(d, c, { refreshUrl: base, returnUrl: `${base}?returned=1` });
     redirect(link.url);
   }
 
+  async function togglePause() {
+    "use server";
+    const d = await getDeps();
+    const c = await resolvePayoutsLink(d, token);
+    if (c) await setPaused(d, c, !c.paused);
+    revalidatePath(self);
+  }
+
+  async function saveSms(fd: FormData) {
+    "use server";
+    const d = await getDeps();
+    const c = await resolvePayoutsLink(d, token);
+    if (!c) return;
+    if (fd.get("op") === "off") {
+      await d.store.updateCoach(c.id, { sms_opt_in_at: null });
+      redirect(`${self}?sms=off`);
+    }
+    const phone = toE164(String(fd.get("phone") ?? ""));
+    if (!phone || fd.get("consent") !== "on") redirect(`${self}?sms=invalid`);
+    await d.store.updateCoach(c.id, { phone, sms_opt_in_at: d.now().toISOString(), sms_opted_out: false });
+    redirect(`${self}?sms=on`);
+  }
+
   return (
-    <div className="card space-y-5 p-6">
+    <div className="space-y-5">
       <div>
-        <p className="text-sm text-muted">Payouts for</p>
-        <h1 className="text-2xl font-bold">{coach.full_name}</h1>
+        <p className="text-sm text-muted">Coach hub</p>
+        <h1 className="text-2xl font-bold">Welcome back, {first}</h1>
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted">
+          <Stars coach={coach} />
+          {speed && <span className="text-success">⚡ {speed}</span>}
+          <Link href={`/coaches/${coach.slug}`} className="font-medium text-blue">View my public profile ↗</Link>
+        </div>
       </div>
-      {ready ? (
-        <Notice tone="success" title="You're all set">
-          Payouts are active. Earnings are sent automatically after each delivered evaluation and reach your bank on Stripe&apos;s payout schedule.
-        </Notice>
-      ) : coach.stripe_details_submitted ? (
-        <Notice tone="warn" title="Stripe is verifying your details">Usually a few minutes. We&apos;ll send your payment automatically once Stripe finishes.</Notice>
-      ) : (
-        <p className="text-[15px] leading-relaxed text-muted">
-          To get paid, complete a one-time secure setup with <strong className="text-navy">Stripe</strong>, our payments partner. Stripe verifies your identity and
-          collects your bank details directly — The Athlete Market never sees your bank login or account number.
-        </p>
-      )}
-      {owed > 0 && !ready && (
-        <div className="rounded-xl bg-surface p-4"><p className="text-sm text-muted">Waiting for you</p><p className="text-3xl font-bold">{money(owed)}</p></div>
-      )}
-      <form action={continueToStripe}>
-        <button className="btn-primary w-full">{ready ? "Open my Stripe payouts dashboard" : coach.stripe_account_id ? "Continue Stripe setup" : "Set up payouts with Stripe"}</button>
-      </form>
-      {!ready && <p className="text-xs text-subtle">Takes about 3 minutes. You&apos;ll need your legal name, date of birth, SSN last 4 (or full, if Stripe asks) and bank details.</p>}
+
+      {/* Earnings */}
+      <div className="grid grid-cols-3 gap-3">
+        {[["Earned", money(earned)], ["On the way", money(owed)], ["Delivered", String(coach.delivered_count)]].map(([k, v]) => (
+          <div key={k} className="card p-4 text-center"><p className="text-xs text-muted">{k}</p><p className="mt-1 text-xl font-bold">{v}</p></div>
+        ))}
+      </div>
+
+      {/* Open requests */}
+      <section className="card p-5">
+        <h2 className="font-semibold">Open requests ({open.length})</h2>
+        {open.length ? (
+          <ul className="mt-3 divide-y divide-line">
+            {open.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{r.athlete_name} · {r.position} · {r.grad_year}</p>
+                  <p className="text-xs text-muted">{money(r.coach_payout_cents)} · respond by {dateOnly(r.expires_at)}{r.film_issue_at ? " · waiting on new film link" : ""}</p>
+                </div>
+                <Link href={coachReviewUrl(r).replace(/^https?:\/\/[^/]+/, "")} className="btn-primary btn-sm shrink-0">Record →</Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Nothing waiting. We&apos;ll email{coach.sms_opt_in_at && !coach.sms_opted_out ? " and text" : ""} you when a family requests you.</p>
+        )}
+      </section>
+
+      {/* Availability */}
+      <section className="card flex items-center justify-between gap-4 p-5">
+        <div>
+          <h2 className="font-semibold">{coach.paused ? "Paused — not accepting new requests" : "Accepting new requests"}</h2>
+          <p className="text-sm text-muted">{coach.paused ? "Families see that you're taking a short break." : "Busy week? Pause anytime. Open requests aren't affected."}</p>
+        </div>
+        <form action={togglePause}><button className={coach.paused ? "btn-primary btn-sm" : "btn-ghost btn-sm"}>{coach.paused ? "Resume" : "Pause"}</button></form>
+      </section>
+
+      {/* Payouts */}
+      <section className="card space-y-4 p-5">
+        <h2 className="font-semibold">Payouts</h2>
+        {ready ? (
+          <Notice tone="success" title="You're all set">Every delivered evaluation pays you automatically. Bank timing follows Stripe&apos;s payout schedule.</Notice>
+        ) : coach.stripe_details_submitted ? (
+          <Notice tone="warn" title="Stripe is verifying your details">Usually a few minutes. You&apos;ll be bookable as soon as Stripe finishes.</Notice>
+        ) : (
+          <p className="text-[15px] leading-relaxed text-muted">
+            <strong className="text-navy">Required before families can book you.</strong> A one-time 3-minute setup with Stripe, our payments partner.
+            Stripe verifies your identity and collects your bank details directly — we never see your bank login or account number.
+          </p>
+        )}
+        <form action={continueToStripe}>
+          <button className={ready ? "btn-ghost w-full" : "btn-primary w-full"}>{ready ? "Open my Stripe payouts dashboard" : coach.stripe_account_id ? "Continue Stripe setup" : "Set up payouts with Stripe (3 min)"}</button>
+        </form>
+      </section>
+
+      {/* Intro video */}
+      <section className="card space-y-4 p-5">
+        <div>
+          <h2 className="font-semibold">Profile intro video</h2>
+          <p className="text-sm text-muted">15–30 seconds on who you are and how you evaluate film. Profiles with a video get far more requests. It&apos;s shown publicly on your profile.</p>
+        </div>
+        {introSrc && <video src={introSrc} controls playsInline preload="metadata" className="aspect-video w-full rounded-xl bg-black" />}
+        <Recorder
+          uploadUrlEndpoint={`/api/hub/${token}/intro-upload-url`}
+          submitEndpoint={`/api/hub/${token}/intro-submit`}
+          recordLabel={introSrc ? "● Record a new intro" : "● Record my intro"}
+          submitLabel="Save intro video"
+          target={[15, 30]}
+          maxSeconds={60}
+          prompts={["Your name + coaching background", "What you look for on film", "What families get from your evaluation"]}
+          attestation={<>I agree this video will be shown publicly on my Athlete Market profile.</>}
+          done={<p className="rounded-xl bg-success-50 p-4 text-center text-sm font-medium text-[#0b4f2a]">Saved! Refresh to see it on your profile.</p>}
+        />
+      </section>
+
+      {/* Text alerts */}
+      <section className="card space-y-3 p-5">
+        <h2 className="font-semibold">Text alerts</h2>
+        {sms === "invalid" && <Notice tone="danger">Enter a valid US mobile number and tick the consent box.</Notice>}
+        {coach.sms_opted_out ? (
+          <p className="text-sm text-muted">You replied STOP, so we don&apos;t text you. To turn texts back on, text START to our number, then save your number below.</p>
+        ) : coach.sms_opt_in_at && coach.phone ? (
+          <form action={saveSms} className="flex items-center justify-between gap-3">
+            <p className="text-sm">On — new requests are texted to <strong>{prettyPhone(coach.phone)}</strong>.</p>
+            <input type="hidden" name="op" value="off" />
+            <button className="btn-ghost btn-sm">Turn off</button>
+          </form>
+        ) : null}
+        {!(coach.sms_opt_in_at && coach.phone && !coach.sms_opted_out) && (
+          <form action={saveSms} className="space-y-3">
+            <p className="text-sm text-muted">Get a text the moment a family requests you — the fastest way to never miss one.</p>
+            <label htmlFor="phone" className="label">Mobile number</label>
+            <input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={coach.phone ? prettyPhone(coach.phone) : ""} placeholder="(555) 123-4567" className="field" />
+            <label className="flex items-start gap-3 text-xs leading-relaxed text-muted">
+              <input type="checkbox" name="consent" className="mt-0.5 h-5 w-5 shrink-0 accent-blue" />
+              <span>{SMS_CONSENT}</span>
+            </label>
+            <button className="btn-navy w-full">Turn on text alerts</button>
+          </form>
+        )}
+      </section>
     </div>
   );
 }

@@ -64,6 +64,18 @@ export interface Mailer {
   send(m: EmailMessage): Promise<{ id: string }>;
 }
 
+export interface SmsMessage {
+  to: string; // E.164
+  body: string;
+}
+export interface Sms {
+  /** false when Twilio isn't configured: callers skip texting and rely on email. */
+  readonly enabled: boolean;
+  /** Throws SmsOptedOutError if the recipient replied STOP. */
+  send(m: SmsMessage): Promise<{ id: string }>;
+}
+export class SmsOptedOutError extends Error {}
+
 export interface VideoStorage {
   createUploadUrl(path: string): Promise<{ url: string }>;
   stat(path: string): Promise<{ size: number; mime: string | null } | null>;

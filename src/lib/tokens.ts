@@ -7,7 +7,7 @@ import { env } from "./env";
  * - Revocable: rotating the nonce stored on the row invalidates every outstanding link.
  * - Expiry is enforced by the row's own deadline (e.g. request.expires_at), not the token.
  */
-export type TokenPurpose = "coach" | "delivery" | "payouts" | "unsub" | "admin";
+export type TokenPurpose = "coach" | "delivery" | "payouts" | "unsub" | "admin" | "fix" | "again";
 
 function sign(purpose: TokenPurpose, id: string, nonce: string, secret = env.appSecret()): string {
   return createHmac("sha256", secret).update(`${purpose}:${id}:${nonce}`).digest("base64url").slice(0, 32);

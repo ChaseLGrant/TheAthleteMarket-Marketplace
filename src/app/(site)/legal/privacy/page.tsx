@@ -15,12 +15,18 @@ export default function Privacy() {
       <h2>Who sees it</h2>
       <ul>
         <li>The Coach you select sees the athlete details and optional fields. Optional fields (GPA, metrics, note) appear only on the secure page, not in email.</li>
-        <li>Service providers acting for us: Stripe (payments), Supabase (database and private video storage), Resend (email), Vercel (hosting).</li>
+        <li>Service providers acting for us: Stripe (payments), Supabase (database and private video storage), Resend (email), Twilio (text messages to coaches), Vercel (hosting).</li>
       </ul>
       <h2>Minors</h2>
       <p>We do not knowingly accept requests from children under 18 without a parent or guardian, who must consent at checkout. Parents may request access to or deletion of their child&apos;s information at any time.</p>
       <h2>Security and retention</h2>
       <p>Videos are stored privately and served only through short-lived signed links. Each video is deleted automatically 30 days after delivery (please download it to keep it), unless it is needed as evidence in an open payment dispute. Athlete details are deleted automatically after the retention period (currently 12 months); limited transaction records are kept as required for accounting and tax.</p>
+      <h2>Text messages (coaches)</h2>
+      <p>
+        Coaches who opt in receive text messages about new evaluation requests and deadlines. Message frequency varies; message and data
+        rates may apply. Reply STOP to opt out or HELP for help. We use Twilio to send texts. <strong>Mobile numbers and text-message
+        opt-in data are never shared with or sold to third parties or affiliates for marketing or promotional purposes.</strong>
+      </p>
       <h2>Your choices</h2>
       <p>Reply to any of our emails to access, correct or delete your information, or to revoke a video link. Coaches can stop all emails with one click.</p>
     </Legal>
