@@ -11,6 +11,7 @@ export interface Deps {
 }
 
 type DemoBundle = Deps & {
+  clockOffsetMs: number;
   store: import("./store-memory").MemoryStore;
   payments: import("./integrations-demo").FakePayments;
   mailer: import("./integrations-demo").FakeMailer;
@@ -29,13 +30,15 @@ export async function getDemo(): Promise<DemoBundle> {
       ]);
       const store = new MemoryStore();
       await seedDemo(store);
-      return {
+      const bundle: DemoBundle = {
+        clockOffsetMs: 0,
         store,
         payments: new demo.FakePayments(),
         mailer: new demo.FakeMailer(),
         storage: new demo.FakeVideoStorage(),
-        now: () => new Date(),
+        now: () => new Date(Date.now() + bundle.clockOffsetMs),
       };
+      return bundle;
     })();
   }
   return g.__tamDemo;

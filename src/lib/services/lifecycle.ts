@@ -511,7 +511,9 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
     );
     if (done) {
       await event(deps, done, "refunded", actor, req.status, "refunded", { why, refund: refund.id });
-      await deps.store.casRequest(req.id, {}, { delivery_link_nonce: randomUUID().replace(/-/g, ""), coach_link_nonce: randomUUID().replace(/-/g, "") });
+      // Revoke any delivery link. The coach link stays valid so it can show a friendly "closed" page;
+      // every coach action re-checks status, so it can no longer submit or trigger payment.
+      await deps.store.casRequest(req.id, {}, { delivery_link_nonce: randomUUID().replace(/-/g, "") });
       try {
         const coach = (await deps.store.getCoach(done.coach_id))!;
         await sendEmail(deps, {

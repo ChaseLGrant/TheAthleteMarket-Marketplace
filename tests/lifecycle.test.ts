@@ -190,14 +190,13 @@ describe("fulfillment + payout", () => {
 });
 
 describe("decline + refunds", () => {
-  it("decline refunds in full exactly once and kills the coach link", async () => {
+  it("decline refunds in full exactly once and the coach can no longer submit", async () => {
     const { deps } = makeDeps();
     await addCoach(deps);
     const req = await paidRequest(deps);
     await Promise.all([declineRequest(deps, req, "busy"), declineRequest(deps, req, "busy")]);
     const r = (await deps.store.getRequest(req.id))!;
     expect(r.status).toBe("refunded");
-    expect(r.coach_link_nonce).not.toBe(req.coach_link_nonce);
     expect(deps.payments.refunds).toHaveLength(1);
     const path = await upload(deps, req.id);
     await expect(submitVideo(deps, r, { path, durationSeconds: 45, attest: true })).rejects.toThrow();

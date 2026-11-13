@@ -119,3 +119,13 @@ describe("validation", () => {
     expect(requestSchema.safeParse(raw({ company: "spam" })).success).toBe(false);
   });
 });
+
+import { filmEmbedUrl } from "@/lib/film";
+describe("film embeds", () => {
+  it("embeds YouTube/Vimeo, links everything else", () => {
+    expect(filmEmbedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toContain("youtube-nocookie.com/embed/dQw4w9WgXcQ");
+    expect(filmEmbedUrl("https://youtu.be/dQw4w9WgXcQ")).toContain("dQw4w9WgXcQ");
+    expect(filmEmbedUrl("https://vimeo.com/123456")).toContain("player.vimeo.com/video/123456");
+    expect(filmEmbedUrl("https://www.hudl.com/video/3/123")).toBeNull();
+  });
+});
