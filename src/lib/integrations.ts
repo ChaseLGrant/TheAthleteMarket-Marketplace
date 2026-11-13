@@ -67,6 +67,7 @@ export interface Mailer {
 export interface VideoStorage {
   createUploadUrl(path: string): Promise<{ url: string }>;
   stat(path: string): Promise<{ size: number; mime: string | null } | null>;
-  playbackUrl(path: string, ttlSeconds: number): Promise<string>;
+  /** Short-lived signed URL. With `downloadAs`, the browser saves the file instead of playing it. */
+  playbackUrl(path: string, ttlSeconds: number, opts?: { downloadAs?: string }): Promise<string>;
   remove(path: string): Promise<void>;
 }

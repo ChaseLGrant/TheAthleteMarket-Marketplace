@@ -34,7 +34,7 @@ export type NewRequest = Omit<
   | "last_error" | "paid_at" | "expires_at" | "coach_notified_at" | "coach_viewed_at" | "accepted_at"
   | "submitted_at" | "completed_at" | "delivered_at" | "declined_at" | "decline_reason" | "expired_at"
   | "refunded_at" | "paid_out_at" | "coach_attested_at" | "last_reminder_at" | "onboarding_email_sent_at"
-  | "purged_at" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
+  | "purged_at" | "video_deleted_at" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
 >;
 
 export interface Store {
@@ -99,6 +99,7 @@ export const DEFAULT_SETTINGS: Settings = {
   require_admin_review: false,
   allow_active_college_coaches: false,
   retention_days: 365,
+  video_retention_days: 30,
 };
 
 export function escapeLike(s: string): string {

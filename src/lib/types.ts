@@ -26,6 +26,7 @@ export interface Settings {
   require_admin_review: boolean;
   allow_active_college_coaches: boolean;
   retention_days: number;
+  video_retention_days: number;
 }
 
 export interface Coach {
@@ -122,6 +123,7 @@ export interface EvalRequest {
   refund_attempts: number;
   payout_attempts: number;
   purged_at: string | null;
+  video_deleted_at: string | null;
   video_path: string | null;
   video_mime: string | null;
   video_size_bytes: number | null;

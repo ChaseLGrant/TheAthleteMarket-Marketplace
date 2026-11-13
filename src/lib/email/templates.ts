@@ -136,19 +136,21 @@ export function purchaserReceipt(a: { req: EvalRequest; coach: Coach; postalAddr
   return { subject, html, text };
 }
 
-export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl: string; postalAddress: string }): Rendered {
+export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl: string; availableUntil: Date | null; postalAddress: string }): Rendered {
+  const until = a.availableUntil ? dateOnly(a.availableUntil.toISOString()) : null;
   const { req, coach } = a;
   const subject = `${coach.full_name} sent ${req.athlete_name.split(" ")[0]}'s video evaluation`;
   const html = layout({
     preheader: "Your private video evaluation is ready to watch.",
     heading: "Your video evaluation is ready",
     bodyHtml:
-      p(`<strong>${esc(coach.full_name)}</strong> recorded a personal evaluation of ${esc(req.athlete_name)}'s film. Tap below to watch it — the link is private to you, so please don't post it publicly.`),
+      p(`<strong>${esc(coach.full_name)}</strong> recorded a personal evaluation of ${esc(req.athlete_name)}'s film. Tap below to watch it — the link is private to you, so please don't post it publicly.`) +
+      (until ? p(`<strong>Download it to keep it.</strong> For privacy, the video is automatically deleted after <strong>${esc(until)}</strong>. Use the download button on the video page.`) : ""),
     cta: { label: "Watch the evaluation", url: a.videoUrl },
     footerHtml: `Reference ${esc(req.ref)}. This link is private; anyone with it can watch the video. Reply to this email to have it revoked.`,
     postalAddress: a.postalAddress,
   });
-  return { subject, html, text: `${coach.full_name} recorded your evaluation. Watch privately: ${a.videoUrl}\n\n${a.postalAddress}` };
+  return { subject, html, text: `${coach.full_name} recorded your evaluation. Watch privately: ${a.videoUrl}${until ? `\n\nDownload it to keep it — the video is automatically deleted after ${until}.` : ""}\n\n${a.postalAddress}` };
 }
 
 export function purchaserRefunded(a: {

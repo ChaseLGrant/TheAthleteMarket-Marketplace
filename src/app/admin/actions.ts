@@ -18,6 +18,7 @@ import {
   attemptPayout, completeRequest, refundRequest, reversePayout, syncAccount, UserFacingError,
 } from "@/lib/services/lifecycle";
 import { DIVISIONS } from "@/lib/constants";
+import { videoAvailableUntil } from "@/lib/retention";
 import type { Coach } from "@/lib/types";
 
 export async function login(_: { error?: string }, fd: FormData): Promise<{ error?: string }> {
@@ -73,8 +74,9 @@ export async function requestAction(_: Result, fd: FormData): Promise<Result> {
       }
       case "resend_delivery": {
         if (req.status !== "completed") throw new Error("Not delivered yet");
+        if (!req.video_path) throw new Error("The video has already been deleted");
         await sendEmail(deps, {
-          to: req.purchaser_email, rendered: purchaserDelivered({ req, coach, videoUrl: deliveryUrl(req), postalAddress: env.postalAddress() }),
+          to: req.purchaser_email, rendered: purchaserDelivered({ req, coach, videoUrl: deliveryUrl(req), availableUntil: videoAvailableUntil(req, await deps.store.getSettings()), postalAddress: env.postalAddress() }),
           template: "purchaser_delivered_resend", idempotencyKey: `delivered-resend-${id}-${Date.now()}`, requestId: id,
         });
         return "Delivery email re-sent";
@@ -207,6 +209,7 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
       deadline_days: Math.min(6, Math.max(1, Number(fd.get("deadline_days")) || 5)), // card holds expire after ~5–7 days
       max_open_requests_per_coach: Math.min(200, Math.max(1, Number(fd.get("max_open")) || 15)),
       retention_days: Math.min(3650, Math.max(30, Number(fd.get("retention_days")) || 365)),
+      video_retention_days: Math.min(365, Math.max(1, Number(fd.get("video_retention_days")) || 30)),
       require_admin_review: fd.get("require_admin_review") === "on",
       allow_active_college_coaches: fd.get("allow_active_college_coaches") === "on",
     });

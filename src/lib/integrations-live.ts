@@ -242,8 +242,8 @@ export class SupabaseVideoStorage implements VideoStorage {
     const meta = (f.metadata ?? {}) as { size?: number; mimetype?: string };
     return { size: Number(meta.size ?? 0), mime: meta.mimetype ?? null };
   }
-  async playbackUrl(path: string, ttlSeconds: number) {
-    const r = await this.bucket().createSignedUrl(path, ttlSeconds);
+  async playbackUrl(path: string, ttlSeconds: number, opts?: { downloadAs?: string }) {
+    const r = await this.bucket().createSignedUrl(path, ttlSeconds, opts?.downloadAs ? { download: opts.downloadAs } : undefined);
     if (r.error || !r.data) throw new Error(`storage signed url: ${r.error?.message}`);
     return r.data.signedUrl;
   }

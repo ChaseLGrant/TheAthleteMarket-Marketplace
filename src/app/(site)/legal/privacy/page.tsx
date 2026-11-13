@@ -20,7 +20,7 @@ export default function Privacy() {
       <h2>Minors</h2>
       <p>We do not knowingly accept requests from children under 18 without a parent or guardian, who must consent at checkout. Parents may request access to or deletion of their child&apos;s information at any time.</p>
       <h2>Security and retention</h2>
-      <p>Videos are stored privately and served only through short-lived signed links. Video and athlete details are deleted automatically after the retention period (currently 12 months); limited transaction records are kept as required for accounting and tax.</p>
+      <p>Videos are stored privately and served only through short-lived signed links. Each video is deleted automatically 30 days after delivery (please download it to keep it), unless it is needed as evidence in an open payment dispute. Athlete details are deleted automatically after the retention period (currently 12 months); limited transaction records are kept as required for accounting and tax.</p>
       <h2>Your choices</h2>
       <p>Reply to any of our emails to access, correct or delete your information, or to revoke a video link. Coaches can stop all emails with one click.</p>
     </Legal>

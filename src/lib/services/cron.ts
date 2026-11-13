@@ -3,6 +3,7 @@ import type { Deps } from "../deps";
 import { env } from "../env";
 import { coachInvite } from "../email/templates";
 import { log } from "../log";
+import { videoDeletable } from "../retention";
 import { coachDeclineUrl, coachReviewUrl, unsubscribeUrl } from "./links";
 import { sendEmail } from "./notify";
 import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest } from "./lifecycle";
@@ -17,7 +18,7 @@ export async function runCron(deps: Deps) {
   const now = deps.now();
   const nowIso = now.toISOString();
   const settings = await deps.store.getSettings();
-  const out = { notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, cancelled: 0, purged: 0, errors: 0 };
+  const out = { notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try { await fn(); } catch (e) { out.errors++; log("error", `cron:${label}`, { error: String(e) }); }
   };
@@ -113,7 +114,20 @@ export async function runCron(deps: Deps) {
     });
   }
 
-  // 7. Data retention: delete videos + minors' details after the retention window.
+  // 7a. Videos are deleted video_retention_days after delivery (families were told to download them).
+  //     Kept while a chargeback is open, because the video is the proof of delivery.
+  const videoCutoff = new Date(now.getTime() - settings.video_retention_days * 24 * HOUR).toISOString();
+  for (const r of await deps.store.listRequests({ status: ["completed", "refunded"], completedBefore: videoCutoff })) {
+    if (!r.video_path || !videoDeletable(r)) continue;
+    await safe("video-delete", async () => {
+      await deps.storage.remove(r.video_path!);
+      const d = await deps.store.casRequest(r.id, {}, { video_path: null, video_deleted_at: nowIso });
+      if (d) await deps.store.addEvent({ request_id: r.id, type: "video_deleted", actor: "cron", from_status: null, to_status: null, data: { reason: "retention" } });
+      out.videosDeleted++;
+    });
+  }
+
+  // 7b. Data retention: delete any remaining video + minors' details after the (longer) retention window.
   const cutoff = new Date(now.getTime() - settings.retention_days * 24 * HOUR).toISOString();
   const old = [
     ...(await deps.store.listRequests({ status: ["completed"], completedBefore: cutoff })),

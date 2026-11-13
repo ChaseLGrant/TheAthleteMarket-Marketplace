@@ -16,7 +16,8 @@ export async function resolveDeliveryLink(deps: Deps, token: string): Promise<{ 
   if (!id) return null;
   const req = await deps.store.getRequest(id);
   if (!req || !verifyToken("delivery", token, req.delivery_link_nonce)) return null;
-  if (req.status !== "completed" || !req.video_path || req.purged_at) return null;
+  // A deleted video still resolves, so the page can explain it was removed after the retention window.
+  if (req.status !== "completed" || req.purged_at) return null;
   const coach = await deps.store.getCoach(req.coach_id);
   return coach ? { req, coach } : null;
 }

@@ -35,5 +35,11 @@ export async function GET(req: Request) {
       headers: { "Content-Type": f.mime, "Content-Range": `bytes ${start}-${end}/${total}`, "Accept-Ranges": "bytes", "Content-Length": String(end - start + 1) },
     });
   }
-  return new NextResponse(new Uint8Array(f.data), { headers: { "Content-Type": f.mime, "Accept-Ranges": "bytes", "Content-Length": String(total) } });
+  const dl = u.searchParams.get("dl");
+  return new NextResponse(new Uint8Array(f.data), {
+    headers: {
+      "Content-Type": f.mime, "Accept-Ranges": "bytes", "Content-Length": String(total),
+      ...(dl ? { "Content-Disposition": `attachment; filename="${dl.replace(/[^\w.-]/g, "_")}"` } : {}),
+    },
+  });
 }

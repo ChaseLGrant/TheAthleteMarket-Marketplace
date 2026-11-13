@@ -15,8 +15,10 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
 ## 1. Supabase
 
 1. Create a project (region close to your users, e.g. `us-east-1`).
-2. **SQL Editor →** paste and run `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_authorize_then_capture.sql`. It creates all tables, locks them down with RLS,
+2. **SQL Editor →** paste and run `supabase/migrations/0001_init.sql`, then `0002_authorize_then_capture.sql`, then `0003_video_retention.sql` (run them in order). It creates all tables, locks them down with RLS,
    and creates the private `evaluation-videos` bucket (500 MB file limit, video types only).
+   Storage stays small: each video (~20 MB) is deleted automatically 30 days after delivery (configurable in Admin → Settings),
+   so at steady state you only hold about one month of videos — roughly 2 GB at 100 evaluations/month.
 3. **Storage → Settings:** set the *global* upload size limit to at least 500 MB (Pro allows this; a 60-second in-browser
    recording is ~15–25 MB, but camera-roll uploads can be larger).
 4. **Project Settings → API:** copy the Project URL → `NEXT_PUBLIC_SUPABASE_URL`, and the `service_role` key → `SUPABASE_SERVICE_ROLE_KEY`.

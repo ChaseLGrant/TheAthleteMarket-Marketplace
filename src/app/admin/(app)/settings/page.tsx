@@ -24,7 +24,10 @@ export default async function Settings() {
             <input id="deadline_days" name="deadline_days" type="number" min={1} max={6} className="field" defaultValue={s.deadline_days} /></div>
           <div><label className="label" htmlFor="max_open">Max open requests per coach</label>
             <input id="max_open" name="max_open" type="number" min={1} max={200} className="field" defaultValue={s.max_open_requests_per_coach} /></div>
-          <div><label className="label" htmlFor="retention_days">Video & minor data retention (days)</label>
+          <div><label className="label" htmlFor="video_retention_days">Delete videos after delivery (days)</label>
+            <input id="video_retention_days" name="video_retention_days" type="number" min={1} max={365} className="field" defaultValue={s.video_retention_days} />
+            <p className="hint">Families are told to download before then. Kept longer only during an open chargeback.</p></div>
+          <div><label className="label" htmlFor="retention_days">Athlete details retention (days)</label>
             <input id="retention_days" name="retention_days" type="number" min={30} max={3650} className="field" defaultValue={s.retention_days} /></div>
         </div>
         <label className="flex items-start gap-3 text-sm"><input type="checkbox" name="require_admin_review" defaultChecked={s.require_admin_review} className="mt-0.5 h-5 w-5 accent-blue" />

@@ -74,6 +74,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
         </section>
       </div>
 
+      {r.video_deleted_at && <p className="rounded-xl bg-surface px-4 py-3 text-sm text-muted">Video auto-deleted {dateTime(r.video_deleted_at)} (retention). Delivery record kept: {r.video_size_bytes ? `${(r.video_size_bytes / 1_048_576).toFixed(1)} MB` : ""}, {r.video_duration_seconds ?? "?"}s, viewed {r.video_view_count}×.</p>}
       {videoUrl && (
         <section className="card p-5">
           <h2 className="font-semibold">Video</h2>

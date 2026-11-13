@@ -139,8 +139,9 @@ export class FakeVideoStorage implements VideoStorage {
     const f = this.files.get(path);
     return f ? { size: f.data.length, mime: f.mime } : null;
   }
-  async playbackUrl(path: string) {
-    return `/api/demo/storage?path=${encodeURIComponent(path)}&sig=${this.sig("get:" + path)}`;
+  async playbackUrl(path: string, _ttl?: number, opts?: { downloadAs?: string }) {
+    const dl = opts?.downloadAs ? `&dl=${encodeURIComponent(opts.downloadAs)}` : "";
+    return `/api/demo/storage?path=${encodeURIComponent(path)}&sig=${this.sig("get:" + path)}${dl}`;
   }
   async remove(path: string) { this.files.delete(path); }
 }

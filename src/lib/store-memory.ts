@@ -99,7 +99,7 @@ export class MemoryStore implements Store {
       coach_notified_at: null, coach_viewed_at: null, accepted_at: null, submitted_at: null, completed_at: null,
       delivered_at: null, declined_at: null, decline_reason: null, expired_at: null, refunded_at: null,
       paid_out_at: null, coach_attested_at: null, last_reminder_at: null, onboarding_email_sent_at: null,
-      purged_at: null, video_path: null, video_mime: null, video_size_bytes: null, video_duration_seconds: null,
+      purged_at: null, video_deleted_at: null, video_path: null, video_mime: null, video_size_bytes: null, video_duration_seconds: null,
     };
     this.requests.set(row.id, row);
     return clone(row);

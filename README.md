@@ -9,7 +9,7 @@ Family: search → pick coach → one-page form → Stripe Checkout (card HOLD o
 Coach:  email with "Review & Record" magic link ──┘
         → watches film → records in browser (or uploads) → "Submit Video & Claim $40"
 Card:   charged at this moment (capture) — only when a video is delivered
-Family: email with private video link
+Family: email with private video link (download button; video auto-deleted 30 days after delivery)
 Coach:  one-time Stripe Connect onboarding → automatic transfer
 No video in 5 days / coach declines → hold released: never charged, $0 Stripe fee
 ```
@@ -34,7 +34,7 @@ Demo mode refuses to start on a Vercel production deployment.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Local dev server |
-| `npm test` | 44 unit/integration tests for money + state logic (Vitest) |
+| `npm test` | 47 unit/integration tests for money + state logic (Vitest) |
 | `npm run typecheck` | TypeScript |
 | `npm run build` | Production build |
 

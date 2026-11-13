@@ -10,6 +10,7 @@ import {
 } from "../email/templates";
 import { log } from "../log";
 import { priceBreakdown } from "../pricing";
+import { videoAvailableUntil } from "../retention";
 import { sourcesFor } from "../state-machine";
 import { randomRef } from "../tokens";
 import type { Coach, EvalRequest, RequestStatus } from "../types";
@@ -385,7 +386,7 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
   try {
     await sendEmail(deps, {
       to: r.purchaser_email,
-      rendered: purchaserDelivered({ req: r, coach, videoUrl: deliveryUrl(r), postalAddress: env.postalAddress() }),
+      rendered: purchaserDelivered({ req: r, coach, videoUrl: deliveryUrl(r), availableUntil: videoAvailableUntil(r, await deps.store.getSettings()), postalAddress: env.postalAddress() }),
       template: "purchaser_delivered",
       idempotencyKey: `delivered-${r.id}`,
       requestId: r.id,

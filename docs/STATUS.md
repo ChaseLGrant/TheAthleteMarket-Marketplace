@@ -4,12 +4,12 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 
 ## Verified in this repo
 
-* **44 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
+* **47 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
   lifecycle against an in-memory database with simulated Stripe and email: duplicate webhooks, concurrent payouts (exactly one
   transfer), late submissions rejected after the deadline, expiry → single refund, decline → single refund, failed refund retried
   by cron, refund blocked after payout, dispute holds payout until won, opt-out refunds open requests, coach capacity, rate limits, and the card-hold model: coach never emailed without a successful
   hold, charge only on submit, declines/expiries cost $0 in fees, failed charge withholds the video and coach payout until
-  retried, deadline clamped before the hold expires, already-lapsed holds close cleanly.
+  retried, deadline clamped before the hold expires, already-lapsed holds close cleanly, and video auto-deletion after 30 days (kept during open chargebacks).
 * **Production build** succeeds (Next.js 16, TypeScript strict).
 * **End-to-end browser run** in demo mode (Chromium, iPhone 13 emulation, fake camera): search, directory-listing block,
   form validation, checkout, coach email link, in-browser recording, upload with progress, family playback, Stripe onboarding

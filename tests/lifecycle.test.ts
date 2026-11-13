@@ -329,3 +329,51 @@ describe("card hold: charge only on delivery", () => {
     expect((await deps.store.getRequest(req.id))!.status).toBe("refunded");
   });
 });
+
+import { resolveDeliveryLink } from "@/lib/services/access";
+import { deliveryUrl } from "@/lib/services/links";
+
+describe("video retention", () => {
+  async function delivered() {
+    const h = makeDeps();
+    await addCoach(h.deps);
+    const req = await paidRequest(h.deps);
+    const done = await submitVideo(h.deps, req, { path: await upload(h.deps, req.id), durationSeconds: 40, attest: true });
+    return { ...h, req: done };
+  }
+  const tokenOf = (r: Parameters<typeof deliveryUrl>[0]) => deliveryUrl(r).split("/v/")[1]!;
+
+  it("tells the family the deletion date and to download", async () => {
+    const { deps } = await delivered();
+    const email = deps.mailer.sent.find((m) => m.to === "parent@example.com" && /evaluation$/.test(m.subject))!;
+    expect(email.html).toContain("Download it to keep it");
+    expect(email.text).toMatch(/deleted after/);
+  });
+
+  it("deletes the video file 30 days after delivery, not before; the link then explains it was deleted", async () => {
+    const { deps, advance, req } = await delivered();
+    advance(29 * 24);
+    await runCron(deps);
+    expect(deps.storage.files.size).toBe(1);
+    advance(2 * 24);
+    await runCron(deps);
+    expect(deps.storage.files.size).toBe(0);
+    const after = (await deps.store.getRequest(req.id))!;
+    expect(after.video_path).toBeNull();
+    expect(after.video_deleted_at).not.toBeNull();
+    expect(after.video_size_bytes).toBeGreaterThan(0); // proof-of-delivery record kept
+    const link = await resolveDeliveryLink(deps, tokenOf(after));
+    expect(link?.req.video_path).toBeNull();
+  });
+
+  it("keeps the video while a chargeback is open", async () => {
+    const { deps, advance, req } = await delivered();
+    await handleDispute(deps, { id: "dp_9", charge: null, payment_intent: req.stripe_payment_intent_id, amount: 4000, reason: "product_not_received", status: "needs_response" });
+    advance(40 * 24);
+    await runCron(deps);
+    expect(deps.storage.files.size).toBe(1);
+    await handleDispute(deps, { id: "dp_9", charge: null, payment_intent: req.stripe_payment_intent_id, amount: 4000, reason: "product_not_received", status: "won" });
+    await runCron(deps);
+    expect(deps.storage.files.size).toBe(0);
+  });
+});
