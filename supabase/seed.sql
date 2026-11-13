@@ -1,3 +1,4 @@
+set search_path to marketplace, extensions, public;
 -- OPTIONAL staging data. Fictional people and schools only. DO NOT run on production.
 insert into coaches (slug, full_name, title, school, sport, division, conference, state, email, coach_kind,
   listing_type, verification_status, eligibility_status, eligibility_basis, price_cents, credentials, bio, is_demo)

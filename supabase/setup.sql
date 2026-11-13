@@ -1,6 +1,6 @@
 -- The Athlete Market Marketplace: complete database setup.
--- Paste this whole file into Supabase → SQL Editor → New query → Run. Run it ONCE on an empty project.
-
+-- Run ONCE in your EXISTING Supabase project: SQL Editor → New query → paste all → Run.
+-- Creates a separate 'marketplace' schema + 'marketplace-videos' bucket. Does not touch your main site's tables.
 
 -- ===================== supabase/migrations/0001_init.sql =====================
 -- The Athlete Market — Coach Evaluation Marketplace
@@ -9,9 +9,15 @@
 -- Security model: the browser never talks to these tables. All reads/writes go
 -- through Next.js server code using the service-role key. RLS is enabled with
 -- NO policies, so the public anon key (if ever exposed) can read nothing.
+--
+-- Everything lives in its own `marketplace` schema so it can share a Supabase project
+-- with the main site without touching any of its tables in `public`.
 
-create extension if not exists pg_trgm;
-create extension if not exists pgcrypto;
+create extension if not exists pg_trgm with schema extensions;
+create extension if not exists pgcrypto with schema extensions;
+
+create schema if not exists marketplace;
+set search_path to marketplace, extensions, public;
 
 -- ---------------------------------------------------------------------------
 -- Enums
@@ -279,6 +285,7 @@ create table rate_limits (
 create or replace function rate_limit_hit(p_key text, p_window_seconds int, p_max int)
 returns boolean
 language plpgsql
+set search_path = marketplace, extensions, public
 as $$
 declare
   v_count int;
@@ -294,7 +301,7 @@ end;
 $$;
 
 -- updated_at triggers
-create or replace function touch_updated_at() returns trigger language plpgsql as $$
+create or replace function touch_updated_at() returns trigger language plpgsql set search_path = marketplace as $$
 begin new.updated_at = now(); return new; end; $$;
 create trigger coaches_touch before update on coaches for each row execute function touch_updated_at();
 create trigger requests_touch before update on requests for each row execute function touch_updated_at();
@@ -315,15 +322,26 @@ alter table marketing_spend enable row level security;
 alter table rate_limits enable row level security;
 revoke execute on function rate_limit_hit(text, int, int) from public, anon, authenticated;
 
+-- Only the server (service_role) may use this schema. The public/browser roles get nothing.
+revoke all on schema marketplace from public, anon, authenticated;
+grant usage on schema marketplace to service_role;
+grant all on all tables in schema marketplace to service_role;
+grant all on all sequences in schema marketplace to service_role;
+grant execute on all functions in schema marketplace to service_role;
+alter default privileges in schema marketplace grant all on tables to service_role;
+alter default privileges in schema marketplace grant all on sequences to service_role;
+alter default privileges in schema marketplace grant execute on functions to service_role;
+
 -- Private video bucket (no public access; served via short-lived signed URLs).
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('evaluation-videos', 'evaluation-videos', false, 524288000,
+values ('marketplace-videos', 'marketplace-videos', false, 524288000,
         array['video/mp4','video/webm','video/quicktime','video/x-m4v','video/3gpp'])
 on conflict (id) do nothing;
 
 -- ===================== supabase/migrations/0002_authorize_then_capture.sql =====================
 -- Authorize at checkout, capture only on delivery.
 -- Declines/expiries release the card hold instead of refunding, so no Stripe fee is lost.
+set search_path to marketplace, extensions, public;
 alter table requests add column if not exists payment_captured_at timestamptz;
 alter table requests add column if not exists authorization_expires_at timestamptz;
 
@@ -336,8 +354,9 @@ alter table settings add constraint settings_deadline_days_check check (deadline
 -- ===================== supabase/migrations/0003_video_retention.sql =====================
 -- Videos are deleted automatically N days after delivery (families are told to download them).
 -- Athlete details follow the separate, longer retention_days setting.
+set search_path to marketplace, extensions, public;
 alter table settings add column if not exists video_retention_days int not null default 30
   check (video_retention_days between 1 and 365);
 alter table requests add column if not exists video_deleted_at timestamptz;
 
-select 'Setup complete ✅' as result;
+select 'Setup complete ✅ — now add "marketplace" to Exposed schemas (Project Settings → Data API)' as result;

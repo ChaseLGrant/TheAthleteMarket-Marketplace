@@ -12,18 +12,25 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
 | Stripe | Checkout, refunds, Connect payouts | Pay-as-you-go |
 | Resend | Transactional email | Free up to 3,000 emails/month |
 
-## 1. Supabase
+## 1. Supabase (inside your existing project — no extra cost)
 
-1. Create a project (region close to your users, e.g. `us-east-1`).
-2. **SQL Editor →** paste and run `supabase/migrations/0001_init.sql`, then `0002_authorize_then_capture.sql`, then `0003_video_retention.sql` (run them in order). It creates all tables, locks them down with RLS,
-   and creates the private `evaluation-videos` bucket (500 MB file limit, video types only).
+The marketplace lives in its **own `marketplace` schema** and its own **`marketplace-videos`** storage bucket inside the
+Supabase project you already pay for. Your main site's tables (in `public`) are not touched. A separate project would add
+~$10/month of compute, so we don't create one.
+
+1. Open your existing project → **SQL Editor → New query** → paste all of `supabase/setup.sql` → **Run**.
+   You should see "Setup complete ✅". (It creates 12 tables, locks them so only the server can read them, and creates the
+   private `marketplace-videos` bucket with a 500 MB file limit.)
+2. **Project Settings → Data API → Exposed schemas:** add `marketplace` → Save. (Required so the app's server can reach the tables.
+   The public/browser roles still get "permission denied" — only the secret server key works.) If "Enable Data API" is off, turn it on.
+3. **Storage → Settings:** make sure the global upload size limit is at least 500 MB.
    Storage stays small: each video (~20 MB) is deleted automatically 30 days after delivery (configurable in Admin → Settings),
    so at steady state you only hold about one month of videos — roughly 2 GB at 100 evaluations/month.
-3. **Storage → Settings:** set the *global* upload size limit to at least 500 MB (Pro allows this; a 60-second in-browser
-   recording is ~15–25 MB, but camera-roll uploads can be larger).
-4. **Project Settings → API:** copy the Project URL → `NEXT_PUBLIC_SUPABASE_URL`, and the `service_role` key → `SUPABASE_SERVICE_ROLE_KEY`.
-   The service role key is server-only; never put it in a `NEXT_PUBLIC_` variable.
-5. (Staging only) run `supabase/seed.sql` after replacing the email with an inbox you control.
+4. **Project Settings → API Keys:** copy the Project URL → `NEXT_PUBLIC_SUPABASE_URL`, and the secret `service_role` key →
+   `SUPABASE_SERVICE_ROLE_KEY`. Never put the service role key in a `NEXT_PUBLIC_` variable or share it in chat.
+5. Keep `SUPABASE_DB_SCHEMA=marketplace` and `SUPABASE_VIDEO_BUCKET=marketplace-videos` (these are also the defaults).
+
+To see the data later: **Table Editor → schema dropdown (top-left) → `marketplace`**.
 
 ## 2. Stripe
 

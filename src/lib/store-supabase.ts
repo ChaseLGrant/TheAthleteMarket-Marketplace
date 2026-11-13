@@ -3,11 +3,14 @@ import { env } from "./env";
 import type { Coach, DisputeRow, EmailLogRow, EvalRequest, RequestEvent, Settings } from "./types";
 import { DEFAULT_SETTINGS, escapeLike, type RequestWhere, type Store } from "./store";
 
-let client: SupabaseClient | null = null;
-export function supabaseAdmin(): SupabaseClient {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let client: SupabaseClient<any, any, any> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function supabaseAdmin(): SupabaseClient<any, any, any> {
   if (!client) {
     client = createClient(env.supabaseUrl(), env.supabaseServiceKey(), {
       auth: { persistSession: false, autoRefreshToken: false },
+      db: { schema: env.dbSchema() }, // all queries + rpc go to the `marketplace` schema
     });
   }
   return client;

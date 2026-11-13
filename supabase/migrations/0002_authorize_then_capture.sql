@@ -1,5 +1,6 @@
 -- Authorize at checkout, capture only on delivery.
 -- Declines/expiries release the card hold instead of refunding, so no Stripe fee is lost.
+set search_path to marketplace, extensions, public;
 alter table requests add column if not exists payment_captured_at timestamptz;
 alter table requests add column if not exists authorization_expires_at timestamptz;
 

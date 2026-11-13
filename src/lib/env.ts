@@ -30,7 +30,9 @@ export const env = {
   mainSiteUrl: () => opt("NEXT_PUBLIC_MAIN_SITE_URL") ?? "https://theathletemarket.com",
   supabaseUrl: () => req("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseServiceKey: () => req("SUPABASE_SERVICE_ROLE_KEY"),
-  videoBucket: () => opt("SUPABASE_VIDEO_BUCKET") ?? "evaluation-videos",
+  /** Postgres schema holding the marketplace tables (kept apart from the main site's `public`). */
+  dbSchema: () => opt("SUPABASE_DB_SCHEMA") ?? "marketplace",
+  videoBucket: () => opt("SUPABASE_VIDEO_BUCKET") ?? "marketplace-videos",
   stripeSecretKey: () => req("STRIPE_SECRET_KEY"),
   stripeWebhookSecrets: () =>
     [opt("STRIPE_WEBHOOK_SECRET"), opt("STRIPE_CONNECT_WEBHOOK_SECRET")].filter((s): s is string => !!s),
