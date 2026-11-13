@@ -15,7 +15,7 @@ import { coachDeclineUrl, coachReviewUrl, deliveryUrl, unsubscribeUrl } from "@/
 import { sendEmail } from "@/lib/services/notify";
 import { purchaserDelivered } from "@/lib/email/templates";
 import {
-  attemptPayout, completeRequest, refundRequest, reversePayout, syncAccount, UserFacingError,
+  attemptPayout, completeRequest, refundRequest, retryPayoutsForCoach, reversePayout, syncAccount, UserFacingError,
 } from "@/lib/services/lifecycle";
 import { DIVISIONS } from "@/lib/constants";
 import { videoAvailableUntil } from "@/lib/retention";
@@ -117,7 +117,7 @@ const coachSchema = z.object({
   bio: z.string().trim().max(1500).optional(),
   credentials: z.string().trim().max(300).optional(),
   listing_type: z.enum(["directory", "participating"]),
-  coach_kind: z.enum(["active_college", "former_college", "independent"]),
+  coach_kind: z.enum(["active_college", "former_college", "independent", "pro_player"]),
   verification_status: z.enum(["unverified", "pending", "verified", "rejected"]),
   eligibility_status: z.enum(["not_reviewed", "pending_review", "approved", "denied", "suspended"]),
   eligibility_basis: z.string().trim().max(1000).optional(),
@@ -165,15 +165,6 @@ export async function saveCoach(_: Result, fd: FormData): Promise<Result> {
       for (let i = 2; await deps.store.getCoachBySlug(slug); i++) slug = `${base}-${i}`;
       newId = (await deps.store.insertCoach({ ...patch, slug, full_name: v.full_name, sport: v.sport })).id;
     }
-    // Approving a coach immediately emails them the payout-setup link, so they're bookable (and paid instantly) ASAP.
-    const saved = (await deps.store.getCoach(newId))!;
-    if (
-      saved.listing_type === "participating" && saved.verification_status === "verified" && saved.eligibility_status === "approved" &&
-      saved.email && !saved.stripe_transfers_active && !saved.payout_invite_sent_at
-    ) {
-      await sendPayoutInvite(deps, saved);
-      return "Saved — approval + payout-setup email sent to the coach";
-    }
     return "Saved";
   }, "/admin/coaches");
   if (!id && res.ok) redirect(`/admin/coaches/${newId}`);
@@ -188,6 +179,13 @@ export async function coachAction(_: Result, fd: FormData): Promise<Result> {
     const coach = await deps.store.getCoach(id);
     if (!coach) throw new Error("Not found");
     if (op === "sync_stripe") { const c = await syncAccount(deps, coach); return `Stripe: transfers ${c.stripe_transfers_active ? "active" : "inactive"}, details ${c.stripe_details_submitted ? "submitted" : "missing"}`; }
+    if (op === "remove") { await deps.store.updateCoach(id, { removed: true }); return "Listing removed (hidden and can't be requested)"; }
+    if (op === "restore") { await deps.store.updateCoach(id, { removed: false }); return "Listing restored"; }
+    if (op === "name_ok") {
+      await deps.store.updateCoach(id, { name_match_override: true });
+      await retryPayoutsForCoach(deps, id);
+      return "Name confirmed — held payouts released";
+    }
     if (op === "send_payout_invite") { await sendPayoutInvite(deps, coach, true); return "Coach hub / payout setup email sent"; }
     if (op === "toggle_pause") { const c = await setPaused(deps, coach, !coach.paused); return c.paused ? "Paused" : "Accepting requests"; }
     if (op === "remove_intro") {
@@ -215,7 +213,10 @@ export async function importCoaches(_: Result, fd: FormData): Promise<Result> {
         slug: base, full_name: r.full_name, sport: r.sport, title: r.title || null, school: r.school || null,
         division: (DIVISIONS as readonly string[]).includes(r.division ?? "") ? r.division! : r.division || null,
         conference: r.conference || null, state: r.state ? r.state.toUpperCase().slice(0, 2) : null,
-        listing_type: "directory", coach_kind: "active_college",
+        email: r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email) ? r.email.toLowerCase() : null,
+        phone: null,
+        listing_type: "directory", source: "import",
+        coach_kind: (["active_college", "former_college", "independent", "pro_player"] as const).find((k) => k === r.type) ?? (r.division === "Professional" ? "pro_player" : "active_college"),
       });
       created++;
     }
@@ -240,8 +241,6 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
       video_retention_days: Math.min(365, Math.max(1, Number(fd.get("video_retention_days")) || 30)),
       require_admin_review: fd.get("require_admin_review") === "on",
       allow_active_college_coaches: fd.get("allow_active_college_coaches") === "on",
-      require_payouts_before_booking: fd.get("require_payouts_before_booking") === "on",
-      show_directory_listings: fd.get("show_directory_listings") === "on",
     });
     return "Settings saved. New prices/commission apply to new requests only.";
   }, "/admin/settings");

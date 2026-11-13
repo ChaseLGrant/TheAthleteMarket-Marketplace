@@ -56,8 +56,7 @@ export default async function CoachesPage({ searchParams }: { searchParams: SP }
       <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Find a coach</h1>
       <p className="mt-2 text-muted">
         {original ? `Pick a second coach for ${original.athlete_name.split(" ")[0]} — details will be filled in for you.` :
-          settings.show_directory_listings ? "Verified evaluators can be booked today. Directory listings are shown for reference only." :
-          "Every coach here is a verified evaluator you can book today."}
+          "Request any coach. If they haven't joined yet, we email them your request — you're only charged if they deliver."}
       </p>
 
       <AutoSubmitForm action="/coaches" className="card mt-6 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
@@ -73,7 +72,7 @@ export default async function CoachesPage({ searchParams }: { searchParams: SP }
         <div className="flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-5">
           <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
             <input type="checkbox" name="available" value="1" defaultChecked={availableOnly} className="h-4 w-4 accent-blue" />
-            Available right now only
+            On The Athlete Market only
           </label>
           <div className="flex gap-2">
             {anyFilter && <Link href="/coaches" className="btn-ghost btn-sm">Clear</Link>}
@@ -88,7 +87,7 @@ export default async function CoachesPage({ searchParams }: { searchParams: SP }
 
       {items.length ? (
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map(({ coach, available }) => <CoachCard key={coach.id} coach={coach} available={available} query={cardQuery} />)}
+          {items.map(({ coach, availability }) => <CoachCard key={coach.id} coach={coach} availability={availability} tiers={settings.price_tiers_cents} query={cardQuery} />)}
         </div>
       ) : (
         <div className="card mt-3 p-10 text-center">
@@ -108,9 +107,16 @@ export default async function CoachesPage({ searchParams }: { searchParams: SP }
         </nav>
       )}
 
-      {settings.show_directory_listings && <p className="mx-auto mt-12 max-w-2xl text-center text-xs leading-relaxed text-subtle">
-        Directory listings are compiled from publicly available information and do not mean the coach or institution participates in,
-        is affiliated with, or endorses The Athlete Market. Only coaches marked &ldquo;Verified evaluator&rdquo; with a price can be booked.
+      <div className="card mt-8 flex flex-col items-center gap-3 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+        <div>
+          <p className="font-semibold">Can&apos;t find your coach?</p>
+          <p className="text-sm text-muted">Add any coach by name and email — we&apos;ll send them your request.</p>
+        </div>
+        <Link href={`/coaches/add${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-navy shrink-0">Request a coach not listed</Link>
+      </div>
+
+      {<p className="mx-auto mt-12 max-w-2xl text-center text-xs leading-relaxed text-subtle">
+        Coach listings come from public information or from coaches who joined. A listing does not mean the coach, school or team is affiliated with or endorses The Athlete Market. Coaches can ask us to remove their listing at any time.
       </p>}
     </div>
   );

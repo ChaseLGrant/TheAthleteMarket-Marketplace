@@ -38,9 +38,24 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
       <Link href="/admin/coaches" className="text-sm text-muted">← Coaches</Link>
       <h1 className="text-2xl font-bold">{isNew ? "Add coach" : c.full_name}</h1>
 
+      {coach && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm">
+            Source: <strong>{coach.source}</strong>{coach.unlisted ? " (added by a family — not in public search)" : ""} ·
+            Email {coach.email_confirmed_at ? "confirmed" : "not confirmed"} · {coach.requests_received} requests received · {coach.delivered_count} delivered
+            {coach.stripe_legal_name && <> · Stripe name: <strong>{coach.stripe_legal_name}</strong></>}
+          </p>
+          <div className="flex gap-2">
+            {pgate?.reasons.some((r) => r.startsWith("Name check")) && <ActionForm action={coachAction} fields={{ id, op: "name_ok" }} label="Name is correct — release payouts" tone="primary" confirm="Confirm this Stripe-verified person is the coach on this profile?" />}
+            {coach.removed
+              ? <ActionForm action={coachAction} fields={{ id, op: "restore" }} label="Restore listing" />
+              : <ActionForm action={coachAction} fields={{ id, op: "remove" }} label="Remove listing" tone="danger" confirm="Hide this coach and block new requests (e.g. takedown request)?" />}
+          </div>
+        </div>
+      )}
       {gate && (gate.ok
-        ? <Notice tone="success" title="Bookable">This coach passes the compliance gate and can receive paid requests.</Notice>
-        : <Notice tone="warn" title="Not bookable"><ul className="list-disc pl-5">{gate.reasons.map((r) => <li key={r}>{r}</li>)}</ul></Notice>)}
+        ? <Notice tone="success" title="Requestable">Families can send this coach paid requests.</Notice>
+        : <Notice tone="warn" title="Can't be requested right now"><ul className="list-disc pl-5">{gate.reasons.map((r) => <li key={r}>{r}</li>)}</ul></Notice>)}
 
       <AdminForm action={saveCoach} className="card p-5">
         <input type="hidden" name="id" value={isNew ? "" : id} />
@@ -66,16 +81,16 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
         <div><label className="label" htmlFor="bio">Bio</label><textarea id="bio" name="bio" rows={3} defaultValue={c.bio ?? ""} className="field" /></div>
         {c.application_message && <Notice title="Application note">{c.application_message}</Notice>}
 
-        <h2 className="pt-2 font-semibold">Compliance gate</h2>
+        <h2 className="pt-2 font-semibold">Approval</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <S n="listing_type" l="Listing" v={c.listing_type} opts={["directory", "participating"]} />
-          <S n="coach_kind" l="Coach status" v={c.coach_kind} opts={["former_college", "independent", "active_college"]} />
+          <S n="coach_kind" l="Coach status" v={c.coach_kind} opts={["former_college", "independent", "pro_player", "active_college"]} />
           <S n="verification_status" l="Identity verification" v={c.verification_status} opts={["unverified", "pending", "verified", "rejected"]} />
           <S n="eligibility_status" l="Eligibility" v={c.eligibility_status} opts={["not_reviewed", "pending_review", "approved", "denied", "suspended"]} />
         </div>
-        <div><label className="label" htmlFor="eligibility_basis">Eligibility basis (required to approve)</label>
+        <div><label className="label" htmlFor="eligibility_basis">Approval note (how you verified who they are)</label>
           <textarea id="eligibility_basis" name="eligibility_basis" rows={2} defaultValue={c.eligibility_basis ?? ""} className="field" placeholder="e.g. Former D2 head coach, left Example U 2024, confirmed no current college employment via LinkedIn + call on 2026-11-01" /></div>
-        <div><label className="label" htmlFor="authorization_reference">Institution + governing-body authorization (required for active college coaches)</label>
+        <div><label className="label" htmlFor="authorization_reference">Compliance office note (optional — e.g. if the coach shares written approval)</label>
           <textarea id="authorization_reference" name="authorization_reference" rows={2} defaultValue={c.authorization_reference ?? ""} className="field" placeholder="Compliance office letter ref, date, signatory; governing-body interpretation ref" /></div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <T n="eligibility_expires_at" l="Eligibility re-review date" v={c.eligibility_expires_at?.slice(0, 10)} t="date" />

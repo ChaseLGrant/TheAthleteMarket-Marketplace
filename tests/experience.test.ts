@@ -179,12 +179,12 @@ describe("coach hub", () => {
     expect(deps.storage.files.has(t.path)).toBe(false);
     await expect(saveIntroVideo(deps, c1, { path: "coaches/other/intro-x.mp4" })).rejects.toThrow(/Invalid/);
   });
-  it("approval sends the payout-setup welcome once", async () => {
+  it("sign-up sends the confirm-email + payout-setup welcome once", async () => {
     const { deps } = makeDeps();
     const coach = await addCoach(deps);
     const c = await sendPayoutInvite(deps, coach);
     await sendPayoutInvite(deps, c);
-    expect(deps.mailer.sent.filter((m) => m.subject.startsWith("You're approved"))).toHaveLength(1);
+    expect(deps.mailer.sent.filter((m) => m.subject.startsWith("Confirm your email"))).toHaveLength(1);
   });
   it("weekly earnings email goes out once a week, only to coaches who were paid", async () => {
     const { deps, advance } = makeDeps();
@@ -219,5 +219,70 @@ describe("pilot defaults", () => {
     const req = await paidRequest(deps);
     await declineRequest(deps, req, null);
     expect(deps.payments.captures).toHaveLength(0);
+  });
+});
+
+
+describe("open marketplace: acquisition loop", () => {
+  it("a family requests a coach who never signed up → coach gets ONE welcome+request email with the offer and a claim-profile link", async () => {
+    const { deps } = makeDeps();
+    await addCoach(deps, { slug: "dir", email: "dir@school.edu", listing_type: "directory", source: "import", email_confirmed_at: null,
+      verification_status: "unverified", eligibility_status: "not_reviewed", price_cents: null });
+    const { requestId } = await createRequestAndCheckout(deps, input({ coachSlug: "dir", offerCents: 5000 }), { ip: "o" });
+    const req = (await deps.store.getRequest(requestId))!;
+    expect(req.price_cents).toBe(5000);
+    deps.payments.authorize(`pi_demo_${req.id}`);
+    const { handleCheckoutPaid } = await import("@/lib/services/lifecycle");
+    await handleCheckoutPaid(deps, { id: "cs", payment_status: "paid", payment_intent: `pi_demo_${req.id}`, client_reference_id: req.id, amount_total: 5000 });
+    const mails = deps.mailer.sent.filter((m) => m.to === "dir@school.edu");
+    expect(mails).toHaveLength(1);
+    expect(mails[0]!.subject).toMatch(/^\$50 evaluation request/);
+    expect(mails[0]!.html).toContain("A family chose you");
+    expect(mails[0]!.html).toContain("Claim your free coach profile");
+  });
+  it("coach without a price: the family must pick an offer from the tiers", async () => {
+    const { deps } = makeDeps();
+    await addCoach(deps, { price_cents: null });
+    await expect(createRequestAndCheckout(deps, input(), { ip: "a" })).rejects.toThrow(/offer/);
+    await expect(createRequestAndCheckout(deps, input({ offerCents: 12345 }), { ip: "b" })).rejects.toThrow(/offer/);
+    const ok = await createRequestAndCheckout(deps, input({ offerCents: 3000 }), { ip: "c" });
+    expect((await deps.store.getRequest(ok.requestId))!.price_cents).toBe(3000);
+  });
+  it("follow-ups: day-1 nudge if unopened, then ~3 days left, then final day — and they stop when the coach responds", async () => {
+    const { deps, advance } = makeDeps();
+    await addCoach(deps);
+    const req = await paidRequest(deps);
+    advance(21);
+    await runCron(deps);
+    expect(deps.mailer.sent.filter((m) => /still waiting/.test(m.subject))).toHaveLength(1);
+    advance(30); // ~69h left
+    await runCron(deps);
+    advance(48); // ~21h left
+    await runCron(deps);
+    const followUps = deps.mailer.sent.filter((m) => m.to === "pat@example.com" && /(still waiting|Reminder)/.test(m.subject));
+    expect(followUps).toHaveLength(3);
+    await declineRequest(deps, (await deps.store.getRequest(req.id))!, null);
+    advance(10);
+    await runCron(deps);
+    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && /(still waiting|Reminder)/.test(m.subject))).toHaveLength(3);
+  });
+  it("impostor protection: Stripe-verified name doesn't match → payout held + founder alerted; admin can release", async () => {
+    process.env.ADMIN_ALERT_EMAIL = "founder@example.com";
+    const { deps } = makeDeps();
+    const coach = await addCoach(deps, { full_name: "Famous Coach" });
+    const { id } = await deps.payments.createConnectAccount({ coachId: coach.id, email: "", name: "Someone Else" });
+    deps.payments.completeOnboarding(id);
+    await deps.store.updateCoach(coach.id, { stripe_account_id: id });
+    const { handleAccountUpdated, attemptPayout } = await import("@/lib/services/lifecycle");
+    await handleAccountUpdated(deps, id);
+    const req = await paidRequest(deps, { coachSlug: "pat-coach" });
+    const r = await submitVideo(deps, req, { path: await upload(deps, req.id), durationSeconds: 40, attest: true });
+    expect(r.payout_status).toBe("blocked");
+    expect(r.payout_block_reason).toMatch(/Name check/);
+    expect(deps.payments.transfers).toHaveLength(0);
+    expect(deps.mailer.sent.some((m) => m.to === "founder@example.com" && /name doesn't match/.test(m.subject))).toBe(true);
+    await deps.store.updateCoach(coach.id, { name_match_override: true });
+    expect((await attemptPayout(deps, req.id)).payout_status).toBe("paid");
+    delete process.env.ADMIN_ALERT_EMAIL;
   });
 });

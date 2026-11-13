@@ -1,5 +1,5 @@
 export type ListingType = "directory" | "participating";
-export type CoachKind = "active_college" | "former_college" | "independent";
+export type CoachKind = "active_college" | "former_college" | "independent" | "pro_player";
 export type VerificationStatus = "unverified" | "pending" | "verified" | "rejected";
 export type EligibilityStatus = "not_reviewed" | "pending_review" | "approved" | "denied" | "suspended";
 
@@ -72,6 +72,14 @@ export interface Coach {
   rating_count: number;
   payout_invite_sent_at: string | null;
   last_summary_at: string | null;
+  self_attested_at?: string | null;
+  email_confirmed_at: string | null;
+  source: "import" | "self" | "family" | "admin";
+  unlisted: boolean;
+  removed: boolean;
+  stripe_legal_name: string | null;
+  name_match_override: boolean;
+  requests_received: number;
   created_at: string;
   updated_at: string;
 }

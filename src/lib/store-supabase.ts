@@ -55,10 +55,8 @@ export class SupabaseStore implements Store {
   }
   async searchCoaches(s: Parameters<Store["searchCoaches"]>[0]) {
     let q = this.db.from("coaches").select("*", { count: "exact" });
-    // Unverified applicants never appear publicly; directory listings only when enabled in settings.
-    q = s.includeDirectory
-      ? q.or("listing_type.eq.directory,verification_status.eq.verified")
-      : q.eq("listing_type", "participating").eq("verification_status", "verified");
+    // Public: everyone except removed, unlisted (family-added) and unconfirmed self-signups.
+    q = q.eq("removed", false).eq("unlisted", false).eq("opted_out", false).or("source.neq.self,email_confirmed_at.not.is.null");
     if (s.q?.trim()) {
       for (const term of s.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) {
         q = q.ilike("search_text", `%${escapeLike(term)}%`);
@@ -68,7 +66,7 @@ export class SupabaseStore implements Store {
     if (s.division) q = q.eq("division", s.division);
     if (s.conference) q = q.eq("conference", s.conference);
     if (s.state) q = q.eq("state", s.state);
-    if (s.availableOnly) q = q.eq("listing_type", "participating").eq("eligibility_status", "approved");
+    if (s.availableOnly) q = q.eq("listing_type", "participating").or("stripe_transfers_active.eq.true,email_confirmed_at.not.is.null");
     for (const o of COACH_PUBLIC_ORDER) q = q.order(o.col, { ascending: o.asc });
     const limit = Math.min(s.limit ?? 24, 60);
     const offset = s.offset ?? 0;

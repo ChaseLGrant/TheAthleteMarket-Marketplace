@@ -176,7 +176,9 @@ export class StripePayments implements Payments {
 
   async getAccountStatus(accountId: string): Promise<AccountStatus> {
     const a = await stripe().accounts.retrieve(accountId);
+    const ind = a.individual;
     return {
+      legalName: ind && (ind.first_name || ind.last_name) ? `${ind.first_name ?? ""} ${ind.last_name ?? ""}`.trim() : null,
       payoutsEnabled: !!a.payouts_enabled,
       transfersActive: a.capabilities?.transfers === "active",
       detailsSubmitted: !!a.details_submitted,

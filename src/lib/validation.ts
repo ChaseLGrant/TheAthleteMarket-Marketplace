@@ -42,6 +42,7 @@ export const requestSchema = z
     utmSource: optionalText(60),
     utmCampaign: optionalText(60),
     fromToken: optionalText(200), // "second opinion" link from a delivered evaluation
+    offerCents: z.coerce.number().int().positive().optional(), // family's offer when the coach hasn't set a price
   })
   .superRefine((v, ctx) => {
     if (v.athleteIsMinor === "yes" && v.relationship !== "parent_guardian") {
@@ -62,7 +63,7 @@ export const applicationSchema = z.object({
   school: optionalText(120),
   division: optionalText(30),
   state: optionalText(2),
-  coachKind: z.enum(["active_college", "former_college", "independent"]),
+  coachKind: z.enum(["active_college", "former_college", "independent", "pro_player"]),
   credentials: optionalText(300),
   message: optionalText(1000),
   attest: z.literal("on", { message: "Please confirm the statement above" }),
@@ -88,6 +89,15 @@ export const introSubmitSchema = z.object({
   path: z.string().max(300),
   durationSeconds: z.number().min(0).max(600).nullable().optional(),
   attest: z.literal(true, { message: "Please confirm" }),
+});
+
+export const addCoachSchema = z.object({
+  coachName: trimmed(80).min(3, "Enter the coach's full name"),
+  coachEmail: z.string().trim().toLowerCase().max(254).email("Enter the coach's email (usually on the school's staff directory)"),
+  school: trimmed(120).min(2, "Enter the school or team"),
+  sport: trimmed(60).min(2, "Choose a sport"),
+  title: optionalText(80),
+  company: z.string().max(0).optional(),
 });
 
 export const ratingSchema = z.object({

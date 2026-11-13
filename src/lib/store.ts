@@ -98,16 +98,16 @@ export interface Store {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  price_tiers_cents: [3000, 4000, 5000],
-  commission_bps: 0,
+  price_tiers_cents: [5000],
+  commission_bps: 2000,
   deadline_days: 5,
   max_open_requests_per_coach: 15,
-  require_admin_review: true,
-  allow_active_college_coaches: false,
+  require_admin_review: false,
+  allow_active_college_coaches: true,
   retention_days: 365,
   video_retention_days: 30,
-  show_directory_listings: false,
-  require_payouts_before_booking: true,
+  show_directory_listings: true,
+  require_payouts_before_booking: false,
 };
 
 export function escapeLike(s: string): string {

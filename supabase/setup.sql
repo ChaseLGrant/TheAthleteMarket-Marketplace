@@ -399,4 +399,41 @@ create unique index if not exists email_log_dedupe on email_log (dedupe_key) whe
 
 grant all on all tables in schema marketplace to service_role;
 
+-- ===================== supabase/migrations/0005_open_to_all_coaches.sql =====================
+-- Owner decision (Nov 2026): open the marketplace to all coaches, including current college assistants
+-- and graduate assistants. Coaches self-attest that accepting payment complies with the rules that apply
+-- to them (on application and on every submission). Admin still verifies identity before approval.
+set search_path to marketplace, extensions, public;
+alter table settings alter column allow_active_college_coaches set default true;
+update settings set allow_active_college_coaches = true;
+alter table coaches add column if not exists self_attested_at timestamptz;
+
+-- Professional / former professional players as evaluators (e.g. pro or barnstorming baseball).
+alter type coach_kind add value if not exists 'pro_player';
+
+-- ===================== supabase/migrations/0006_open_marketplace.sql =====================
+-- Open marketplace (owner decision, Nov 2026): families can request ANY coach — no admin approval.
+--  * Directory coaches and coaches a family adds are emailed the request; payment motivates a response.
+--  * Self-signups go live once they confirm their email (by opening their coach hub link).
+--  * Identity is verified by Stripe before any payout; a name mismatch holds the payout for review.
+set search_path to marketplace, extensions, public;
+
+alter table coaches add column if not exists email_confirmed_at timestamptz;
+alter table coaches add column if not exists source text not null default 'import';   -- import | self | family | admin
+alter table coaches add column if not exists unlisted boolean not null default false;  -- family-added: direct link only
+alter table coaches add column if not exists removed boolean not null default false;   -- takedown request / admin removal
+alter table coaches add column if not exists stripe_legal_name text;
+alter table coaches add column if not exists name_match_override boolean not null default false;
+alter table coaches add column if not exists requests_received int not null default 0;
+
+alter table settings alter column require_payouts_before_booking set default false;
+alter table settings alter column show_directory_listings set default true;
+alter table settings alter column require_admin_review set default false;
+update settings set require_payouts_before_booking = false, show_directory_listings = true, require_admin_review = false;
+
+-- Pricing (owner decision): one $50 price, 20% platform commission → coach $40, platform $10 (minus Stripe's fee).
+alter table settings alter column price_tiers_cents set default '{5000}';
+alter table settings alter column commission_bps set default 2000;
+update settings set price_tiers_cents = '{5000}', commission_bps = 2000;
+
 select 'Setup complete ✅ — now add "marketplace" to Exposed schemas (Project Settings → Data API)' as result;

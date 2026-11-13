@@ -18,10 +18,21 @@ const coach = (o: Partial<Coach> = {}): Coach => ({
   stripe_details_submitted: false, opted_out: false, is_demo: false, application_message: null,
   phone: null, sms_opt_in_at: null, sms_opted_out: false, paused: false, intro_video_path: null, delivered_count: 0,
   delivery_hours_total: 0, rating_sum: 0, rating_count: 0, payout_invite_sent_at: null, last_summary_at: null,
+  email_confirmed_at: null, source: "import", unlisted: false, removed: false, stripe_legal_name: null,
+  name_match_override: false, requests_received: 0,
   created_at: "", updated_at: "", ...o,
 });
 
 describe("pricing", () => {
+  it("launch defaults: $50 price, 20% to the platform → coach $40, platform $10 before Stripe's fee", () => {
+    expect(PROD_SETTINGS.price_tiers_cents).toEqual([5000]);
+    const b = priceBreakdown(5000, PROD_SETTINGS);
+    expect(b.coach_payout_cents).toBe(4000);
+    expect(b.platform_fee_cents).toBe(1000);
+    expect(b.estimated_stripe_fee_cents).toBe(175);
+    expect(b.estimated_platform_net_cents).toBe(825);
+    expect(resolvePrice(coach({ price_cents: null }), PROD_SETTINGS)).toBe(5000);
+  });
   it("pilot: 0% commission, coach gets full listed amount, platform absorbs Stripe fee", () => {
     const b = priceBreakdown(4000, { commission_bps: 0 });
     expect(b.coach_payout_cents).toBe(4000);
@@ -39,44 +50,48 @@ describe("pricing", () => {
   });
 });
 
-describe("compliance gate", () => {
-  it("allows a verified, approved former coach", () => {
-    expect(paidRequestGate(coach(), DEFAULT_SETTINGS).ok).toBe(true);
+import { availabilityLabel, namesMatch, resolvePrice } from "@/lib/compliance";
+
+describe("open marketplace: who can be requested", () => {
+  it("ANY coach with an email can be requested — no approval, no Stripe setup needed first", () => {
+    const directory = coach({ listing_type: "directory", verification_status: "unverified", eligibility_status: "not_reviewed", price_cents: null });
+    expect(paidRequestGate(directory, PROD_SETTINGS).ok).toBe(true);
+    expect(availabilityLabel(directory, PROD_SETTINGS)).toBe("invite");
+    expect(paidRequestGate(coach({ coach_kind: "active_college" }), PROD_SETTINGS).ok).toBe(true);
+    expect(paidRequestGate(coach({ coach_kind: "pro_player", division: "Professional" }), PROD_SETTINGS).ok).toBe(true);
   });
-  it("blocks directory listings", () => {
-    expect(paidRequestGate(coach({ listing_type: "directory" }), DEFAULT_SETTINGS).ok).toBe(false);
+  it("blocks only: no email, opted out, removed, paused, unconfirmed self-signup", () => {
+    expect(paidRequestGate(coach({ email: null }), PROD_SETTINGS).ok).toBe(false);
+    expect(paidRequestGate(coach({ opted_out: true }), PROD_SETTINGS).ok).toBe(false);
+    expect(paidRequestGate(coach({ removed: true }), PROD_SETTINGS).ok).toBe(false);
+    expect(paidRequestGate(coach({ paused: true }), PROD_SETTINGS).ok).toBe(false);
+    expect(paidRequestGate(coach({ source: "self" }), PROD_SETTINGS).ok).toBe(false);
+    expect(paidRequestGate(coach({ source: "self", email_confirmed_at: "2026-11-01T00:00:00Z" }), PROD_SETTINGS).ok).toBe(true);
   });
-  it("blocks active college coaches by default even when approved", () => {
-    const g = paidRequestGate(coach({ coach_kind: "active_college", authorization_reference: "letter" }), DEFAULT_SETTINGS);
-    expect(g.ok).toBe(false);
+  it("joined = confirmed email or payouts set up", () => {
+    expect(availabilityLabel(coach({ source: "self", email_confirmed_at: "x" }), PROD_SETTINGS)).toBe("joined");
+    expect(availabilityLabel(coach({ stripe_transfers_active: true }), PROD_SETTINGS)).toBe("joined");
   });
-  it("active college coaches need setting AND documented authorization", () => {
-    const s = { ...DEFAULT_SETTINGS, allow_active_college_coaches: true };
-    expect(paidRequestGate(coach({ coach_kind: "active_college" }), s).ok).toBe(false);
-    expect(paidRequestGate(coach({ coach_kind: "active_college", authorization_reference: "Compliance letter #12" }), s).ok).toBe(true);
+  it("price (multi-tier mode): the coach's own price, else the family's offer from the tiers", () => {
+    const multi = { ...PROD_SETTINGS, price_tiers_cents: [3000, 4000, 5000] };
+    expect(resolvePrice(coach({ price_cents: 4000 }), multi, 5000)).toBe(4000);
+    expect(resolvePrice(coach({ price_cents: null }), multi, 5000)).toBe(5000);
+    expect(resolvePrice(coach({ price_cents: null }), multi, 9900)).toBeNull();
+    expect(resolvePrice(coach({ price_cents: null }), multi)).toBeNull();
   });
-  it("blocks unverified, pending, expired eligibility, missing basis, off-tier price", () => {
-    expect(paidRequestGate(coach({ verification_status: "pending" }), DEFAULT_SETTINGS).ok).toBe(false);
-    expect(paidRequestGate(coach({ eligibility_status: "pending_review" }), DEFAULT_SETTINGS).ok).toBe(false);
-    expect(paidRequestGate(coach({ eligibility_expires_at: "2020-01-01T00:00:00Z" }), DEFAULT_SETTINGS).ok).toBe(false);
-    expect(paidRequestGate(coach({ eligibility_basis: " " }), DEFAULT_SETTINGS).ok).toBe(false);
-    expect(paidRequestGate(coach({ price_cents: 3500 }), DEFAULT_SETTINGS).ok).toBe(false);
+  it("payout requires Stripe identity, and the verified name must match the profile (impostor check)", () => {
+    const ready = { stripe_account_id: "a", stripe_transfers_active: true, stripe_details_submitted: true };
+    expect(payoutGate(coach(), PROD_SETTINGS).ok).toBe(false);
+    expect(payoutGate(coach({ ...ready, full_name: "Michael Jordan", stripe_legal_name: "Mike Jordan" }), PROD_SETTINGS).ok).toBe(true);
+    expect(payoutGate(coach({ ...ready, full_name: "Nick Saban", stripe_legal_name: "Random Person" }), PROD_SETTINGS).ok).toBe(false);
+    expect(payoutGate(coach({ ...ready, full_name: "Nick Saban", stripe_legal_name: "Random Person", name_match_override: true }), PROD_SETTINGS).ok).toBe(true);
+    expect(payoutGate(coach({ ...ready, opted_out: true, paused: true, price_cents: null }), PROD_SETTINGS).ok).toBe(true);
   });
-  it("by default a coach must finish Stripe payout setup BEFORE they can be booked", () => {
-    expect(paidRequestGate(coach(), PROD_SETTINGS).ok).toBe(false);
-    expect(paidRequestGate(coach({ stripe_account_id: "a", stripe_transfers_active: true, stripe_details_submitted: true }), PROD_SETTINGS).ok).toBe(true);
-  });
-  it("a paused coach can't be booked, but still gets paid for delivered work", () => {
-    const ready = { stripe_account_id: "a", stripe_transfers_active: true, stripe_details_submitted: true, paused: true };
-    expect(paidRequestGate(coach(ready), PROD_SETTINGS).reasons.join()).toMatch(/paused/);
-    expect(payoutGate(coach(ready), PROD_SETTINGS).ok).toBe(true);
-  });
-  it("payout requires completed Stripe onboarding", () => {
-    expect(payoutGate(coach(), DEFAULT_SETTINGS).ok).toBe(false);
-    expect(payoutGate(coach({ stripe_account_id: "acct_1", stripe_transfers_active: true, stripe_details_submitted: true }), DEFAULT_SETTINGS).ok).toBe(true);
-  });
-  it("opting out of email does not forfeit an earned payout", () => {
-    expect(payoutGate(coach({ opted_out: true, stripe_account_id: "a", stripe_transfers_active: true, stripe_details_submitted: true }), DEFAULT_SETTINGS).ok).toBe(true);
+  it("name matching tolerates nicknames, middle names and suffixes", () => {
+    expect(namesMatch("Chris Nakamura", "Christopher J Nakamura")).toBe(true);
+    expect(namesMatch("Derek Hampton Jr.", "Derek Hampton")).toBe(true);
+    expect(namesMatch("José Reyes", "Jose Reyes")).toBe(true);
+    expect(namesMatch("Pat Coach", "Pat Smith")).toBe(false);
   });
 });
 

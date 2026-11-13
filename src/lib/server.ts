@@ -15,7 +15,7 @@ export async function isBot(): Promise<boolean> {
 }
 
 export function annotate(coaches: Coach[], settings: Settings) {
-  return coaches.map((c) => ({ coach: c, available: availabilityLabel(c, settings) === "available" }));
+  return coaches.map((c) => ({ coach: c, availability: availabilityLabel(c, settings) }));
 }
 
 export { getDeps };

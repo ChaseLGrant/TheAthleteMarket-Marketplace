@@ -39,19 +39,29 @@ export function Avatar({ coach, size = 56 }: { coach: Pick<Coach, "full_name" | 
   );
 }
 
-export function VerifiedBadge() {
+/** Coach has joined (confirmed email / set up payouts). */
+export function JoinedBadge() {
   return (
     <span className="pill bg-blue-50 text-blue">
       <svg aria-hidden viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="currentColor">
         <path d="M10 1.5l2.2 1.6 2.7-.1.9 2.6 2.2 1.6-.8 2.6.8 2.6-2.2 1.6-.9 2.6-2.7-.1L10 18.5l-2.2-1.6-2.7.1-.9-2.6L2 12.8l.8-2.6L2 7.6l2.2-1.6.9-2.6 2.7.1L10 1.5zm-1.1 11.3l5-5-1.2-1.2-3.8 3.8-1.7-1.7L6 9.9l2.9 2.9z" />
       </svg>
-      Verified evaluator
+      On The Athlete Market
     </span>
   );
 }
 
-export function DirectoryBadge() {
-  return <span className="pill bg-surface text-muted ring-1 ring-line">Directory listing</span>;
+/** Coach hasn't joined: we'll email them the request. */
+export function InviteBadge() {
+  return <span className="pill bg-surface text-muted ring-1 ring-line">✉︎ We&apos;ll email them your request</span>;
+}
+
+export type Availability = "joined" | "invite" | "unavailable";
+
+export function PriceLabel({ coach, tiers }: { coach: Pick<Coach, "price_cents">; tiers: number[] }) {
+  if (coach.price_cents && tiers.includes(coach.price_cents)) return <span className="text-[15px] font-bold text-navy">{money(coach.price_cents)}</span>;
+  if (tiers.length === 1) return <span className="text-[15px] font-bold text-navy">{money(tiers[0])}</span>;
+  return <span className="text-sm font-semibold text-navy">Offer {money(Math.min(...tiers))}–{money(Math.max(...tiers))}</span>;
 }
 
 export function Notice({ tone = "info", title, children }: { tone?: "info" | "warn" | "success" | "danger"; title?: string; children: ReactNode }) {
@@ -79,7 +89,7 @@ export function Stars({ coach }: { coach: Pick<Coach, "rating_sum" | "rating_cou
   );
 }
 
-export function CoachCard({ coach, available, query = "" }: { coach: Coach; available: boolean; query?: string }) {
+export function CoachCard({ coach, availability, tiers, query = "" }: { coach: Coach; availability: Availability; tiers: number[]; query?: string }) {
   const speed = deliveryBadge(coach);
   return (
     <Link
@@ -104,20 +114,15 @@ export function CoachCard({ coach, available, query = "" }: { coach: Coach; avai
         {coach.state && <span className="pill bg-surface text-navy ring-1 ring-line">{coach.state}</span>}
       </div>
       <div className="mt-auto flex items-center justify-between border-t border-line pt-3.5">
-        {available ? (
+        {availability === "unavailable" ? (
           <>
-            <VerifiedBadge />
-            <span className="text-[15px] font-bold text-navy">{money(coach.price_cents)}</span>
-          </>
-        ) : coach.listing_type === "directory" ? (
-          <>
-            <DirectoryBadge />
-            <span className="text-xs font-medium text-muted">Not accepting requests</span>
+            <span className="pill bg-surface text-muted ring-1 ring-line">{coach.paused ? "Taking a short break" : "Not taking requests"}</span>
+            <span />
           </>
         ) : (
           <>
-            <VerifiedBadge />
-            <span className="text-xs font-medium text-muted">{coach.paused ? "Taking a short break" : "Unavailable"}</span>
+            {availability === "joined" ? <JoinedBadge /> : <InviteBadge />}
+            <PriceLabel coach={coach} tiers={tiers} />
           </>
         )}
       </div>

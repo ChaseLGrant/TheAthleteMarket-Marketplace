@@ -7,6 +7,7 @@ export const DIVISIONS = [
   "NAIA",
   "NJCAA",
   "CCCAA",
+  "Professional",
   "Independent",
 ] as const;
 

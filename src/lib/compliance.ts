@@ -7,51 +7,57 @@ export interface GateResult {
 }
 
 /**
- * HARD compliance gate. A coach can be offered paid evaluation requests ONLY if every check passes.
- * Enforced on the profile page, the request form, checkout creation, and again before any payout.
- *
- * Active college coaches may be prohibited by NCAA/NAIA/NJCAA/CCCAA rules and their institution from
- * accepting compensation for evaluating prospects. They are blocked unless (a) the platform setting
- * explicitly allows them AND (b) admin has recorded a written authorization reference from both the
- * institution's compliance office and the applicable governing-body interpretation.
+ * Can a family send this coach a paid request? Open marketplace: no admin approval.
+ * Only practical/legal blockers remain (no email, opted out, removed, paused, unconfirmed self-signup).
+ * Price is chosen at checkout (coach's own price, or the family's offer from the configured tiers).
  */
-export function paidRequestGate(coach: Coach, settings: Settings, now = new Date()): GateResult {
+export function paidRequestGate(coach: Coach, settings: Settings, _now = new Date()): GateResult {
   const reasons: string[] = [];
-  if (coach.listing_type !== "participating") reasons.push("Directory listing only — coach has not joined.");
-  if (coach.verification_status !== "verified") reasons.push("Coach identity is not verified.");
-  if (coach.eligibility_status !== "approved") reasons.push("Compensation eligibility is not approved.");
-  if (coach.eligibility_expires_at && new Date(coach.eligibility_expires_at) <= now)
-    reasons.push("Eligibility approval has expired and must be re-reviewed.");
-  if (!coach.eligibility_basis?.trim()) reasons.push("No documented eligibility basis.");
-  if (coach.coach_kind === "active_college") {
-    if (!settings.allow_active_college_coaches)
-      reasons.push("Active college coaches are disabled platform-wide pending governing-body guidance.");
-    if (!coach.authorization_reference?.trim())
-      reasons.push("Active college coach has no recorded institutional + governing-body authorization.");
-  }
-  if (coach.opted_out) reasons.push("Coach has opted out of emails.");
+  if (coach.removed) reasons.push("This listing has been removed.");
+  if (!coach.email) reasons.push("We don't have an email address for this coach yet.");
+  if (coach.opted_out) reasons.push("This coach has asked not to receive requests.");
   if (coach.paused) reasons.push("Coach has paused new requests.");
+  if (coach.source === "self" && !coach.email_confirmed_at) reasons.push("Coach hasn't confirmed their email yet.");
+  if (coach.coach_kind === "active_college" && !settings.allow_active_college_coaches)
+    reasons.push("Current college coaches are switched off in Admin → Settings.");
   if (settings.require_payouts_before_booking && !(coach.stripe_transfers_active && coach.stripe_details_submitted))
     reasons.push("Payout setup with Stripe is not complete yet.");
-  if (!coach.email) reasons.push("No email address on file.");
-  if (!isValidTier(coach.price_cents, settings)) reasons.push("Price is not one of the configured tiers.");
   return { ok: reasons.length === 0, reasons };
 }
 
-/** Additional checks before money moves to a coach. */
-export function payoutGate(coach: Coach, settings: Settings, now = new Date()): GateResult {
-  const base = paidRequestGate(coach, settings, now);
-  // Opting out, pausing or a price change never forfeits money already earned.
-  const reasons = base.reasons.filter(
-    (r) => !r.startsWith("Coach has opted out") && !r.startsWith("Coach has paused") && !r.startsWith("Price is not") && !r.startsWith("Payout setup with Stripe"),
-  );
+/** The coach's own price if valid; otherwise the family chooses an offer from the tiers. */
+export function resolvePrice(coach: Coach, settings: Settings, offerCents?: number | null): number | null {
+  if (isValidTier(coach.price_cents, settings)) return coach.price_cents;
+  if (offerCents != null && isValidTier(offerCents, settings)) return offerCents;
+  if (settings.price_tiers_cents.length === 1) return settings.price_tiers_cents[0]!;
+  return null;
+}
+export function familyChoosesOffer(coach: Coach, settings: Settings): boolean {
+  return settings.price_tiers_cents.length > 1 && !isValidTier(coach.price_cents, settings);
+}
+
+/** Loose name match: same last name (handles Mike/Michael, middle names, suffixes). */
+export function namesMatch(profile: string, legal: string): boolean {
+  const last = (s: string) =>
+    s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, "")
+      .replace(/[^a-z\s-]/g, "").trim().split(/\s+/).pop() ?? "";
+  return !!last(profile) && last(profile) === last(legal);
+}
+
+/** Before money moves: Stripe has verified the coach's identity, and that identity matches the profile. */
+export function payoutGate(coach: Coach, _settings: Settings, _now = new Date()): GateResult {
+  const reasons: string[] = [];
+  if (coach.removed) reasons.push("Listing removed — review before paying.");
   if (!coach.stripe_account_id) reasons.push("Coach has not started payout setup.");
   else if (!coach.stripe_transfers_active || !coach.stripe_details_submitted)
     reasons.push("Coach payout setup / identity verification is incomplete in Stripe.");
+  if (coach.stripe_legal_name && !coach.name_match_override && !namesMatch(coach.full_name, coach.stripe_legal_name))
+    reasons.push(`Name check: Stripe-verified name "${coach.stripe_legal_name}" doesn't match profile "${coach.full_name}".`);
   return { ok: reasons.length === 0, reasons };
 }
 
-export function availabilityLabel(coach: Coach, settings: Settings): "available" | "unavailable" | "directory" {
-  if (coach.listing_type === "directory") return "directory";
-  return paidRequestGate(coach, settings).ok ? "available" : "unavailable";
+/** "joined" = coach is on the platform; "invite" = we'll email them the request; "unavailable" = can't request. */
+export function availabilityLabel(coach: Coach, settings: Settings): "joined" | "invite" | "unavailable" {
+  if (!paidRequestGate(coach, settings).ok) return "unavailable";
+  return coach.listing_type === "participating" && (coach.stripe_transfers_active || !!coach.email_confirmed_at) ? "joined" : "invite";
 }

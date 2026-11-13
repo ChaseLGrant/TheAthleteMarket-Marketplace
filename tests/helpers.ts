@@ -21,6 +21,8 @@ export function makeDeps() {
   // Most tests exercise the raw lifecycle; dedicated tests cover review + payout-before-booking.
   deps.store.settings.require_admin_review = false;
   deps.store.settings.require_payouts_before_booking = false;
+  deps.store.settings.price_tiers_cents = [3000, 4000, 5000];
+  deps.store.settings.commission_bps = 0;
   const advance = (hours: number) => { now = new Date(now.getTime() + hours * 3_600_000); };
   return { deps: deps as Deps & typeof deps, advance };
 }
@@ -36,6 +38,7 @@ export async function addCoach(deps: Deps, over: Partial<Coach> = {}) {
     verification_status: "verified",
     eligibility_status: "approved",
     eligibility_basis: "Former coach, no current college role",
+    email_confirmed_at: "2026-10-01T00:00:00Z",
     price_cents: 4000,
     ...over,
   });

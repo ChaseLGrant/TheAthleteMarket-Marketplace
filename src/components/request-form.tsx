@@ -15,6 +15,10 @@ interface Props {
   /** Second-opinion: signed token + the original request's details to pre-fill. */
   fromToken?: string;
   prefill?: Record<string, string>;
+  /** When the coach hasn't set a price, the family picks an offer from these tiers. */
+  offerTiers?: number[];
+  /** Coach has joined (vs. we'll email them the request). */
+  joined?: boolean;
 }
 
 const thisYear = new Date().getFullYear();
@@ -24,6 +28,10 @@ export function RequestForm(p: Props) {
   const [state, action, pending] = useActionState<FormState, FormData>(submitRequest, {});
   const v = state.values ?? p.prefill ?? {};
   const [film, setFilm] = useState(v.filmUrl ?? "");
+  const tiers = p.offerTiers ?? [];
+  const [offer, setOffer] = useState<number>(Number(v.offerCents) || tiers[Math.floor(tiers.length / 2)] || 0);
+  const dollars = (c: number) => "$" + c / 100;
+  const priceText = tiers.length ? dollars(offer) : p.priceLabel;
   const err = state.fields ?? {};
   const [minor, setMinor] = useState<"yes" | "no">((v.athleteIsMinor as "yes" | "no") ?? "yes");
   const [rel, setRel] = useState(v.relationship ?? "parent_guardian");
@@ -37,6 +45,7 @@ export function RequestForm(p: Props) {
       <input type="hidden" name="utmSource" value={p.utmSource ?? ""} />
       <input type="hidden" name="utmCampaign" value={p.utmCampaign ?? ""} />
       <input type="hidden" name="fromToken" value={p.fromToken ?? ""} />
+      {tiers.length > 0 && <input type="hidden" name="offerCents" value={offer} />}
       <div className="hidden" aria-hidden>
         <label>Company <input name="company" tabIndex={-1} autoComplete="off" /></label>
       </div>
@@ -125,6 +134,21 @@ export function RequestForm(p: Props) {
         )}
       </div>
 
+      {tiers.length > 0 && (
+        <fieldset className="space-y-3">
+          <legend className="text-lg font-semibold">Your offer to Coach {p.coachFirstName}</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {tiers.map((t) => (
+              <label key={t} className={cx("flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-xl border text-lg font-bold transition", offer === t ? "border-blue bg-blue-50 text-blue" : "border-line text-navy hover:bg-surface")}>
+                <input type="radio" name="_offer" checked={offer === t} onChange={() => setOffer(t)} className="sr-only" />
+                {dollars(t)}
+              </label>
+            ))}
+          </div>
+          <p className="hint">The coach sees your offer before deciding. It&apos;s only charged if they deliver.</p>
+        </fieldset>
+      )}
+
       <fieldset className="space-y-3 rounded-2xl bg-surface p-4">
         {minor === "yes" && (
           <Check name="guardianConsent" error={err.guardianConsent}>
@@ -141,10 +165,11 @@ export function RequestForm(p: Props) {
 
       <div className="space-y-3">
         <button className="btn-primary w-full text-[17px]" disabled={pending}>
-          {pending ? "Opening secure checkout…" : `Continue to secure checkout · ${p.priceLabel}`}
+          {pending ? "Opening secure checkout…" : `Continue to secure checkout · ${priceText}`}
         </button>
         <p className="text-center text-xs leading-relaxed text-muted">
-          Secure checkout by Stripe. We place a hold on your card now and <strong>only charge it when your video is delivered</strong>. If {p.coachFirstName} declines or doesn&apos;t deliver within {p.deadlineDays} days, the hold is released and you&apos;re never charged.
+          Secure checkout by Stripe. We place a hold on your card now and <strong>only charge it when your video is delivered</strong>.
+          {p.joined ? "" : ` We'll email Coach ${p.coachFirstName} your request right away.`} If {p.coachFirstName} declines or doesn&apos;t deliver within {p.deadlineDays} days, the hold is released and you&apos;re never charged.
         </p>
       </div>
     </form>

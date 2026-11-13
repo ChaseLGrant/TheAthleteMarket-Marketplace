@@ -10,8 +10,8 @@ export function ApplyForm() {
   if (s.ok) {
     return (
       <div className="rounded-2xl bg-success-50 p-6 ring-1 ring-[#c3e8d2]">
-        <p className="text-lg font-semibold">Thanks — application received.</p>
-        <p className="mt-1 text-sm text-muted">We review every evaluator by hand, including identity and eligibility to accept payment. We&apos;ll email you within a few business days.</p>
+        <p className="text-lg font-semibold">Almost done — check your email.</p>
+        <p className="mt-1 text-sm text-muted">Check your inbox — tap the link in our email to confirm and your profile goes live. Then set up payouts so every evaluation pays you instantly.</p>
       </div>
     );
   }
@@ -44,13 +44,14 @@ export function ApplyForm() {
           <select id="coachKind" name="coachKind" className="field" defaultValue={v.coachKind ?? "former_college"}>
             <option value="former_college">Former college coach (no current college role)</option>
             <option value="independent">Independent evaluator / trainer</option>
-            <option value="active_college">Currently employed by a college</option>
+            <option value="active_college">Current college assistant / grad assistant / staff</option>
+            <option value="pro_player">Professional or former pro player</option>
           </select>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <F n="title" l="Most relevant title" />
-        <F n="school" l="School(s)" />
+        <F n="school" l="School or team" />
         <div>
           <label htmlFor="division" className="label">Division</label>
           <select id="division" name="division" className="field" defaultValue={v.division ?? ""}>
@@ -74,13 +75,12 @@ export function ApplyForm() {
       <label className="flex items-start gap-3 rounded-xl bg-surface p-4 text-sm leading-relaxed">
         <input type="checkbox" name="attest" className="mt-0.5 h-5 w-5 shrink-0 accent-blue" />
         <span>
-          I understand active college coaches may be prohibited from accepting payment for evaluating prospective athletes, and that I will not be
-          offered paid requests until The Athlete Market verifies my identity and documented eligibility (including written authorization from my
-          institution and governing body, if I&apos;m currently employed by a college).
+          I agree to the <a href="/legal/terms" target="_blank" className="font-semibold text-blue underline">evaluator terms</a>: honest feedback,
+          and never promising recruitment, a scholarship or a roster spot. I will never promise recruitment, a scholarship, admission or a roster spot.
         </span>
       </label>
       {e.attest && <p className="field-error">{e.attest}</p>}
-      <button className="btn-primary w-full" disabled={pending}>{pending ? "Sending…" : "Apply to become an evaluator"}</button>
+      <button className="btn-primary w-full" disabled={pending}>{pending ? "Sending…" : "Create my coach profile"}</button>
     </form>
   );
 }

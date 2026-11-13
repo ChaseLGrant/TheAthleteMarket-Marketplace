@@ -9,16 +9,16 @@ import { addCoach, input, makeDeps, paidRequest, upload } from "./helpers";
 import type Stripe from "stripe";
 
 async function onboard(d: ReturnType<typeof makeDeps>["deps"], coachId: string) {
-  const { id } = await d.payments.createConnectAccount({ coachId, email: "pat@example.com", name: "Pat" });
+  const { id } = await d.payments.createConnectAccount({ coachId, email: "pat@example.com", name: "Pat Coach" });
   await d.store.updateCoach(coachId, { stripe_account_id: id });
   d.payments.completeOnboarding(id);
   await handleAccountUpdated(d, id);
 }
 
 describe("checkout", () => {
-  it("refuses coaches that fail the compliance gate", async () => {
+  it("refuses coaches who can't be requested (removed listing)", async () => {
     const { deps } = makeDeps();
-    await addCoach(deps, { eligibility_status: "pending_review" });
+    await addCoach(deps, { removed: true });
     await expect(createRequestAndCheckout(deps, input(), { ip: "x" })).rejects.toThrow(/isn't accepting/);
     expect(deps.payments.sessions.size).toBe(0);
   });
@@ -79,7 +79,7 @@ describe("payment webhook", () => {
     const { deps } = makeDeps();
     const coach = await addCoach(deps);
     const { requestId } = await createRequestAndCheckout(deps, input(), { ip: "x" });
-    await deps.store.updateCoach(coach.id, { eligibility_status: "suspended" });
+    await deps.store.updateCoach(coach.id, { removed: true });
     deps.payments.authorize(`pi_demo_${requestId}`);
     await handleCheckoutPaid(deps, { id: "cs", payment_status: "paid", payment_intent: `pi_demo_${requestId}`, client_reference_id: requestId, amount_total: 4000 });
     const r = (await deps.store.getRequest(requestId))!;
@@ -98,7 +98,7 @@ describe("payment webhook", () => {
     await runCron(deps);
     expect((await deps.store.getRequest(req.id))!.status).toBe("coach_notified");
     await runCron(deps);
-    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && m.subject.startsWith("New paid"))).toHaveLength(1);
+    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com" && m.subject.startsWith("$40 evaluation request"))).toHaveLength(1);
   });
 });
 

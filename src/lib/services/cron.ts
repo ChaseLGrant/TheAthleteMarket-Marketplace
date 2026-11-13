@@ -4,7 +4,7 @@ import { env } from "../env";
 import { coachInvite } from "../email/templates";
 import { log } from "../log";
 import { videoDeletable } from "../retention";
-import { coachDeclineUrl, coachReviewUrl, unsubscribeUrl } from "./links";
+import { coachDeclineUrl, coachReviewUrl, hubUrl, unsubscribeUrl } from "./links";
 import { sendEmail } from "./notify";
 import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest, textCoach } from "./lifecycle";
 import { sendWeeklySummaries } from "./experience";
@@ -79,24 +79,36 @@ export async function runCron(deps: Deps) {
     });
   }
 
-  // 5. Reminders. Windows are wide enough for a once-a-day cron (Vercel Hobby).
+  // 5. Follow-ups until the coach responds (stops on submit/decline/expiry). Designed for a once-a-day cron:
+  //    stage 1 — ~1 day after the first email, only if they haven't opened it ("$40 is still waiting")
+  //    stage 2 — ~3 days left
+  //    stage 3 — final day
   for (const r of await deps.store.listRequests({ status: ["coach_notified", "accepted"] })) {
     if (!r.expires_at) continue;
     const hoursLeft = (Date.parse(r.expires_at) - now.getTime()) / HOUR;
-    const due = (r.reminder_count === 0 && hoursLeft <= 72 && hoursLeft > 36) || (r.reminder_count <= 1 && hoursLeft <= 36 && hoursLeft > 1);
-    if (!due) continue;
+    const hoursSinceNotify = r.coach_notified_at ? (now.getTime() - Date.parse(r.coach_notified_at)) / HOUR : 0;
+    const stages = [
+      () => hoursSinceNotify >= 20 && !r.coach_viewed_at && hoursLeft > 60,
+      () => hoursLeft <= 72 && hoursLeft > 30,
+      () => hoursLeft <= 30 && hoursLeft > 1,
+    ];
+    let stage = -1;
+    for (let i = r.reminder_count; i < stages.length; i++) if (stages[i]!()) { stage = i; break; }
+    if (stage < 0) continue;
     await safe("reminder", async () => {
       const coach = await deps.store.getCoach(r.coach_id);
-      if (!coach?.email) return;
-      const n = r.reminder_count + 1;
+      if (!coach?.email || coach.opted_out) return;
+      const n = stage + 1;
       const claimed = await deps.store.casRequest(r.id, { status: ["coach_notified", "accepted"] }, { reminder_count: n, last_reminder_at: nowIso });
+      // (claimed is null if the coach just responded — then no follow-up goes out)
       if (!claimed) return;
       await sendEmail(deps, {
         to: coach.email,
         rendered: coachInvite({
           req: r, coach, reviewUrl: coachReviewUrl(r), declineUrl: coachDeclineUrl(r),
           unsubscribeUrl: unsubscribeUrl(coach.email), postalAddress: env.postalAddress(),
-          reminder: { daysLeft: Math.max(1, Math.round(hoursLeft / 24)) },
+          reminder: { daysLeft: Math.max(1, Math.round(hoursLeft / 24)), nudge: stage === 0 },
+          hubUrl: hubUrl(coach),
         }),
         template: "coach_reminder",
         idempotencyKey: `coach-reminder-${r.id}-${n}`,

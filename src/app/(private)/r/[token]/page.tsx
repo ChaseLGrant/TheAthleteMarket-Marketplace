@@ -122,10 +122,6 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
             submitLabel={`Submit Video & Claim ${amount}`}
             prompts={["Who you are + what you watched", `1–2 strengths you saw in ${first}`, "1–2 things to improve + one next step"]}
             withTakeaways
-            attestation={
-              <>I&apos;m permitted to accept this payment under any rules that apply to me (including my employer and athletics governing body),
-                this video is my own honest feedback, and it does not promise recruitment, a scholarship, admission or a roster spot.</>
-            }
             done={
               <div className="rounded-2xl bg-success-50 p-6 text-center ring-1 ring-[#c3e8d2]">
                 <p className="text-4xl">✓</p>

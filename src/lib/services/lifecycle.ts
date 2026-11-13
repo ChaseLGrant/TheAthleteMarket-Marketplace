@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Deps } from "../deps";
 import { env } from "../env";
-import { paidRequestGate, payoutGate } from "../compliance";
+import { paidRequestGate, payoutGate, resolvePrice } from "../compliance";
 import {
   VIDEO_HARD_MAX_SECONDS, VIDEO_MAX_BYTES, VIDEO_MIME_TYPES, VIDEO_MIN_BYTES, VIDEO_MIN_SECONDS,
 } from "../constants";
@@ -68,7 +68,9 @@ export async function createRequestAndCheckout(
   if ((await store.countOpenRequestsForCoach(coach.id)) >= settings.max_open_requests_per_coach)
     throw new UserFacingError("This coach is at capacity right now. Please choose another coach or try again in a few days.", "capacity");
 
-  const pb = priceBreakdown(coach.price_cents!, settings);
+  const price = resolvePrice(coach, settings, input.offerCents ?? null);
+  if (!price) throw new UserFacingError("Please choose how much to offer the coach.", "bad_offer");
+  const pb = priceBreakdown(price, settings);
   // "Second opinion" purchases link back to the original request (for repeat-purchase analytics).
   let parentRequestId: string | null = null;
   if (input.fromToken) {
@@ -252,6 +254,7 @@ export async function notifyCoach(deps: Deps, requestId: string) {
   });
   if (r) {
     await event(deps, r, "coach_notified", "system", "paid", "coach_notified", { to: coach.email });
+    await deps.store.updateCoach(coach.id, { requests_received: coach.requests_received + 1 }).catch(() => {});
     await textCoach(deps, coach, r, smsText.coachNewRequest(r, coachReviewUrl(r)), `coach-sms-new-${r.id}`, "coach_new_request");
   }
 }
@@ -463,7 +466,11 @@ export async function attemptPayout(deps: Deps, requestId: string): Promise<Eval
       req.id, { status: ["completed"], payout_status: ["pending", "blocked", "failed"] },
       { payout_status: "blocked", payout_block_reason: gate.reasons.join(" ") },
     );
-    if (blocked && req.payout_status !== "blocked") await event(deps, blocked, "payout_blocked", "system", null, null, { reasons: gate.reasons });
+    if (blocked && req.payout_status !== "blocked") {
+      await event(deps, blocked, "payout_blocked", "system", null, null, { reasons: gate.reasons });
+      const nameIssue = gate.reasons.find((x) => x.startsWith("Name check"));
+      if (nameIssue) await alertAdmin(deps, "Payout held: name doesn't match", [`${req.ref} — ${nameIssue}`, "If it's legit (nickname etc.), click “Name is correct” on the coach page to release."], adminRequestUrl(req.id));
+    }
     const needsOnboarding = gate.reasons.some((x) => /payout setup/i.test(x));
     if (blocked && needsOnboarding && !blocked.onboarding_email_sent_at && coach.email) {
       try {
@@ -532,15 +539,20 @@ export async function syncAccount(deps: Deps, coach: Coach): Promise<Coach> {
   if (!coach.stripe_account_id) return coach;
   try {
     const s = await deps.payments.getAccountStatus(coach.stripe_account_id);
+    const legal = s.legalName ?? coach.stripe_legal_name;
     if (
       s.payoutsEnabled !== coach.stripe_payouts_enabled ||
       s.transfersActive !== coach.stripe_transfers_active ||
-      s.detailsSubmitted !== coach.stripe_details_submitted
+      s.detailsSubmitted !== coach.stripe_details_submitted ||
+      legal !== coach.stripe_legal_name
     ) {
       return deps.store.updateCoach(coach.id, {
         stripe_payouts_enabled: s.payoutsEnabled,
         stripe_transfers_active: s.transfersActive,
         stripe_details_submitted: s.detailsSubmitted,
+        stripe_legal_name: legal,
+        // Finishing Stripe setup also proves they own this listing's email (the setup link was emailed to it).
+        ...(s.detailsSubmitted && !coach.email_confirmed_at ? { email_confirmed_at: iso(deps.now()) } : {}),
       });
     }
   } catch (e) {

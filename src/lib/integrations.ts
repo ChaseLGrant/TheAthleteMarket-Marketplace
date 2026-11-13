@@ -47,6 +47,8 @@ export interface PaymentDetails {
 }
 
 export interface AccountStatus {
+  /** Stripe-verified legal name of the individual, when Stripe shares it with the platform. */
+  legalName?: string | null;
   payoutsEnabled: boolean;
   transfersActive: boolean;
   detailsSubmitted: boolean;

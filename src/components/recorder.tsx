@@ -39,7 +39,7 @@ export interface RecorderProps {
   recordLabel?: string;
   submitLabel: string;
   /** Checkbox the user must tick before submitting. */
-  attestation: ReactNode;
+  attestation?: ReactNode;
   /** Talking points shown on screen while recording. */
   prompts?: string[];
   target?: [number, number];
@@ -69,7 +69,7 @@ export function Recorder(props: RecorderProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
-  const [attest, setAttest] = useState(false);
+  const [attest, setAttest] = useState(!props.attestation);
   const [facing, setFacing] = useState<"user" | "environment">("user");
   const [canRecord, setCanRecord] = useState(true);
 
@@ -336,10 +336,12 @@ export function Recorder(props: RecorderProps) {
             </fieldset>
           )}
 
+{attestation && (
           <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-surface p-4 text-sm leading-relaxed">
             <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-blue" disabled={phase === "uploading"} />
             <span>{attestation}</span>
           </label>
+          )}
 
           {phase === "uploading" ? (
             <div className="space-y-2" aria-live="polite">

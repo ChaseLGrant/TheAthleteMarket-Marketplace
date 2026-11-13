@@ -6,7 +6,7 @@ import { annotate, getDeps } from "@/lib/server";
 export const dynamic = "force-dynamic";
 
 const STEPS = [
-  { n: "1", title: "Pick a coach", body: "Search verified college-level evaluators by sport, division, conference or state." },
+  { n: "1", title: "Pick any coach", body: "Search by name, school, sport, division or state — or add any coach by email. You choose what to offer." },
   { n: "2", title: "Share your film", body: "Paste your Hudl or YouTube link and a few details. Checkout takes about a minute." },
   { n: "3", title: "Get your video", body: "Your coach records a personal 30–60 second evaluation. We email you a private link." },
 ];
@@ -26,7 +26,7 @@ const FAQ = [
   },
   {
     q: "Who are the coaches?",
-    a: "Paid requests are only available for evaluators we've verified and approved under our eligibility policy — for example former college coaches and independent evaluators. We only list coaches who have joined.",
+    a: "Any coach you want — college head coaches, assistants and grad assistants, former coaches, independent evaluators and professional players. Coaches marked “On The Athlete Market” have joined. For anyone else, we email them your request and they choose whether to take it. Listings aren't an endorsement by any coach, school or team.",
   },
   {
     q: "Do I need an account?",
@@ -41,8 +41,10 @@ const FAQ = [
 export default async function Home() {
   const deps = await getDeps();
   const settings = await deps.store.getSettings();
-  const { coaches } = await deps.store.searchCoaches({ availableOnly: true, limit: 6 });
-  const featured = annotate(coaches, settings).filter((x) => x.available);
+  // Coaches who've joined first; fill with others so the section is never empty.
+  const joined = (await deps.store.searchCoaches({ availableOnly: true, limit: 6 })).coaches;
+  const more = joined.length < 6 ? (await deps.store.searchCoaches({ limit: 12 })).coaches.filter((c) => !joined.some((j) => j.id === c.id)) : [];
+  const featured = annotate([...joined, ...more].slice(0, 6), settings).filter((x) => x.availability !== "unavailable");
   const minPrice = Math.min(...settings.price_tiers_cents) / 100;
   const maxPrice = Math.max(...settings.price_tiers_cents) / 100;
 
@@ -59,7 +61,7 @@ export default async function Home() {
             Honest feedback on your film from a college-level coach.
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#C9D3EA]">
-            A personal 30–60 second video evaluation of your highlight reel. ${minPrice}–${maxPrice}. No accounts, no app.
+            A personal 30–60 second video evaluation of your highlight reel. {minPrice === maxPrice ? `$${minPrice}` : `$${minPrice}–$${maxPrice}`}. No accounts, no app.
           </p>
           <form action="/coaches" className="mt-8 flex max-w-2xl flex-col gap-2 rounded-2xl bg-white p-2 shadow-[0_20px_60px_-20px_rgba(0,0,0,.5)] sm:flex-row">
             <label htmlFor="hero-q" className="sr-only">Search coaches</label>
@@ -72,7 +74,7 @@ export default async function Home() {
             <button className="btn-primary h-12 sm:px-7">Find a coach</button>
           </form>
           <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#C9D3EA]">
-            <li>✓ Verified evaluators</li>
+            <li>✓ Request any coach</li>
             <li>✓ Secure Stripe checkout</li>
             <li>✓ Private video link</li>
           </ul>
@@ -83,14 +85,14 @@ export default async function Home() {
       <section className="container-page py-16">
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
-            <p className="eyebrow">Available now</p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Verified evaluators</h2>
+            <p className="eyebrow">Request any coach</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Coaches families are requesting</h2>
           </div>
-          <Link href="/coaches?available=1" className="text-sm font-semibold text-blue hover:underline">See all →</Link>
+          <Link href="/coaches" className="text-sm font-semibold text-blue hover:underline">See all →</Link>
         </div>
         {featured.length ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map(({ coach, available }) => <CoachCard key={coach.id} coach={coach} available={available} />)}
+            {featured.map(({ coach, availability }) => <CoachCard key={coach.id} coach={coach} availability={availability} tiers={settings.price_tiers_cents} />)}
           </div>
         ) : (
           <p className="card p-8 text-center text-muted">Our first evaluators are being verified. <Link className="font-semibold text-blue" href="/coaches">Browse the directory</Link>.</p>

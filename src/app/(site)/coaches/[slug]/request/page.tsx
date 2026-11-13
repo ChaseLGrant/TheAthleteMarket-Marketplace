@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RequestForm } from "@/components/request-form";
-import { Avatar, Notice, VerifiedBadge } from "@/components/ui";
-import { paidRequestGate } from "@/lib/compliance";
+import { Avatar, InviteBadge, JoinedBadge, Notice } from "@/components/ui";
+import { availabilityLabel, familyChoosesOffer, paidRequestGate, resolvePrice } from "@/lib/compliance";
 import { money } from "@/lib/format";
 import { getDeps, isBot } from "@/lib/server";
 import { resolveAgainLink } from "@/lib/services/access";
@@ -18,7 +18,7 @@ export default async function RequestPage({ params, searchParams }: P) {
   const sp = await searchParams;
   const deps = await getDeps();
   const coach = await deps.store.getCoachBySlug(slug);
-  if (!coach) notFound();
+  if (!coach || coach.removed) notFound();
   const settings = await deps.store.getSettings();
   const gate = paidRequestGate(coach, settings);
   if (!(await isBot())) deps.store.track("form_view", coach.id).catch(() => {});
@@ -36,9 +36,9 @@ export default async function RequestPage({ params, searchParams }: P) {
   if (!gate.ok) {
     return (
       <div className="container-page max-w-xl py-16 text-center">
-        <h1 className="text-2xl font-bold">{coach.full_name} isn&apos;t accepting requests</h1>
-        <p className="mt-2 text-muted">Paid evaluations are only available from verified, approved evaluators.</p>
-        <Link href="/coaches?available=1" className="btn-primary mt-6">See available coaches</Link>
+        <h1 className="text-2xl font-bold">{coach.full_name} isn&apos;t taking requests right now</h1>
+        <p className="mt-2 text-muted">{gate.reasons[0]}</p>
+        <Link href={`/coaches?sport=${encodeURIComponent(coach.sport)}`} className="btn-primary mt-6">See other {coach.sport} coaches</Link>
       </div>
     );
   }
@@ -57,7 +57,9 @@ export default async function RequestPage({ params, searchParams }: P) {
             coachSlug={coach.slug}
             coachFirstName={coach.full_name.split(" ")[0]!}
             sport={coach.sport}
-            priceLabel={money(coach.price_cents)}
+            priceLabel={money(resolvePrice(coach, settings) ?? coach.price_cents)}
+            offerTiers={familyChoosesOffer(coach, settings) ? settings.price_tiers_cents : undefined}
+            joined={availabilityLabel(coach, settings) === "joined"}
             deadlineDays={settings.deadline_days}
             utmSource={sp.utm_source}
             utmCampaign={sp.utm_campaign}
@@ -74,11 +76,11 @@ export default async function RequestPage({ params, searchParams }: P) {
                 <p className="truncate text-sm text-muted">{[coach.title, coach.school].filter(Boolean).join(" · ")}</p>
               </div>
             </div>
-            <div className="mt-3"><VerifiedBadge /></div>
+            <div className="mt-3">{availabilityLabel(coach, settings) === "joined" ? <JoinedBadge /> : <InviteBadge />}</div>
             <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
-              <div className="flex justify-between"><dt className="text-muted">30–60s video evaluation</dt><dd className="font-semibold">{money(coach.price_cents)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">30–60s video evaluation</dt><dd className="font-semibold">{familyChoosesOffer(coach, settings) ? "Your offer" : money(resolvePrice(coach, settings) ?? coach.price_cents)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Delivery</dt><dd className="font-semibold">Within {settings.deadline_days} days</dd></div>
-              <div className="flex justify-between border-t border-line pt-2 text-base"><dt className="font-semibold">Total</dt><dd className="font-bold">{money(coach.price_cents)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Charged</dt><dd className="font-semibold">Only if delivered</dd></div>
             </dl>
           </div>
         </aside>

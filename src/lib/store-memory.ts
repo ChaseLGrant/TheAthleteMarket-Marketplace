@@ -3,6 +3,9 @@ import type { Coach, DisputeRow, EmailLogRow, EvalRequest, RequestEvent, Setting
 import { DEFAULT_SETTINGS, type NewRequest, type RequestFilter, type RequestWhere, type Store } from "./store";
 
 const clone = <T>(v: T): T => structuredClone(v);
+/** Public search: everyone except removed, unlisted (family-added) and unconfirmed self-signups. */
+const isPublic = (c: Coach) => !c.removed && !c.unlisted && !c.opted_out && (c.source !== "self" || !!c.email_confirmed_at);
+const isJoined = (c: Coach) => c.listing_type === "participating" && (c.stripe_transfers_active || !!c.email_confirmed_at);
 const nowIso = () => new Date().toISOString();
 const searchText = (c: Coach) =>
   [c.full_name, c.school, c.sport, c.division, c.conference, c.state, c.title].filter(Boolean).join(" ").toLowerCase();
@@ -35,8 +38,7 @@ export class MemoryStore implements Store {
     return clone([...this.coaches.values()].filter((c) => c.email?.toLowerCase() === email.trim().toLowerCase()));
   }
   async searchCoaches(s: Parameters<Store["searchCoaches"]>[0]) {
-    let list = [...this.coaches.values()].filter((c) =>
-      c.listing_type === "directory" ? !!s.includeDirectory : c.verification_status === "verified");
+    let list = [...this.coaches.values()].filter((c) => isPublic(c));
     if (s.q?.trim()) {
       const terms = s.q.trim().toLowerCase().split(/\s+/);
       list = list.filter((c) => terms.every((t) => searchText(c).includes(t)));
@@ -45,10 +47,8 @@ export class MemoryStore implements Store {
     if (s.division) list = list.filter((c) => c.division === s.division);
     if (s.conference) list = list.filter((c) => c.conference === s.conference);
     if (s.state) list = list.filter((c) => c.state === s.state);
-    if (s.availableOnly) list = list.filter((c) => c.listing_type === "participating" && c.eligibility_status === "approved");
-    list.sort((a, b) =>
-      a.listing_type !== b.listing_type ? (a.listing_type === "participating" ? -1 : 1) : a.full_name.localeCompare(b.full_name),
-    );
+    if (s.availableOnly) list = list.filter((c) => isJoined(c));
+    list.sort((a, b) => (isJoined(a) !== isJoined(b) ? (isJoined(a) ? -1 : 1) : a.full_name.localeCompare(b.full_name)));
     const offset = s.offset ?? 0;
     return { coaches: clone(list.slice(offset, offset + (s.limit ?? 24))), total: list.length };
   }
@@ -77,6 +77,8 @@ export class MemoryStore implements Store {
       stripe_details_submitted: false, opted_out: false, is_demo: false, application_message: null,
       phone: null, sms_opt_in_at: null, sms_opted_out: false, paused: false, intro_video_path: null, delivered_count: 0,
       delivery_hours_total: 0, rating_sum: 0, rating_count: 0, payout_invite_sent_at: null, last_summary_at: null,
+      email_confirmed_at: null, source: "import", unlisted: false, removed: false, stripe_legal_name: null,
+      name_match_override: false, requests_received: 0,
       created_at: nowIso(), updated_at: nowIso(), ...c,
     };
     this.coaches.set(row.id, row);

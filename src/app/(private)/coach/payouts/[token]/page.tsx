@@ -27,6 +27,8 @@ export default async function CoachHub({ params, searchParams }: P) {
   let coach = await resolvePayoutsLink(deps, token);
   if (!coach) notFound();
   if (coach.stripe_account_id) coach = await syncAccount(deps, coach);
+  // Opening this emailed link proves they own the address → self-signups go live.
+  if (!coach.email_confirmed_at) coach = await deps.store.updateCoach(coach.id, { email_confirmed_at: deps.now().toISOString() });
   if (returned && coach.stripe_transfers_active) await retryPayoutsForCoach(deps, coach.id);
 
   const all = await deps.store.listRequests({ coach_id: coach.id, limit: 200 });

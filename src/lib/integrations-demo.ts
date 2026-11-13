@@ -11,7 +11,7 @@ export class FakePayments implements Payments {
   sessions = new Map<string, CheckoutArgs & { url: string }>();
   refunds: { id: string; paymentIntentId: string; requestId: string }[] = [];
   transfers: { id: string; group: string; amountCents: number; destination: string; reversed: boolean }[] = [];
-  accounts = new Map<string, AccountStatus & { coachId: string }>();
+  accounts = new Map<string, AccountStatus & { coachId: string; name: string }>();
   /** PaymentIntent status by id: requires_capture (held) → succeeded (captured) | canceled (released). */
   intents = new Map<string, string>();
   captures: string[] = [];
@@ -91,10 +91,10 @@ export class FakePayments implements Payments {
     if (t) t.reversed = true;
     return { id: `trr_demo_${transferId}` };
   }
-  async createConnectAccount(a: { coachId: string }) {
+  async createConnectAccount(a: { coachId: string; name?: string }) {
     return this.once(`acct-${a.coachId}`, () => {
       const id = `acct_demo_${a.coachId.slice(0, 8)}`;
-      this.accounts.set(id, { coachId: a.coachId, payoutsEnabled: false, transfersActive: false, detailsSubmitted: false });
+      this.accounts.set(id, { coachId: a.coachId, name: a.name ?? "", payoutsEnabled: false, transfersActive: false, detailsSubmitted: false });
       return { id };
     });
   }
@@ -104,11 +104,13 @@ export class FakePayments implements Payments {
   async createDashboardLink() { return { url: "/demo/inbox" }; }
   async getAccountStatus(accountId: string) {
     const a = this.accounts.get(accountId);
-    return a ? { payoutsEnabled: a.payoutsEnabled, transfersActive: a.transfersActive, detailsSubmitted: a.detailsSubmitted }
+    return a ? { legalName: a.detailsSubmitted ? a.name || null : null, payoutsEnabled: a.payoutsEnabled, transfersActive: a.transfersActive, detailsSubmitted: a.detailsSubmitted }
       : { payoutsEnabled: false, transfersActive: false, detailsSubmitted: false };
   }
-  completeOnboarding(accountId: string) {
+  /** Simulates Stripe verifying the person. `legalName` lets tests simulate an impostor. */
+  completeOnboarding(accountId: string, legalName?: string) {
     const a = this.accounts.get(accountId);
+    if (a && legalName) a.name = legalName;
     if (a) Object.assign(a, { payoutsEnabled: true, transfersActive: true, detailsSubmitted: true });
   }
   constructEvent(): Stripe.Event { throw new Error("Webhooks are simulated directly in demo mode"); }
