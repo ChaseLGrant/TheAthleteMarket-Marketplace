@@ -24,12 +24,12 @@ export default async function UnsubscribePage({ params, searchParams }: { params
       {done ? (
         <>
           <h1 className="text-xl font-bold">You won&apos;t hear from us again</h1>
-          <p className="mt-2 text-sm text-muted">{email} has been removed. Any open requests were declined and the families refunded.</p>
+          <p className="mt-2 text-sm text-muted">{email} has been removed. Any open requests were declined; those families won't be charged.</p>
         </>
       ) : (
         <>
           <h1 className="text-xl font-bold">Stop all evaluation emails?</h1>
-          <p className="mt-2 text-sm text-muted">We&apos;ll never email <strong>{email}</strong> about evaluation requests again. Open requests will be declined and refunded.</p>
+          <p className="mt-2 text-sm text-muted">We&apos;ll never email <strong>{email}</strong> about evaluation requests again. Open requests will be declined and those families won't be charged.</p>
           <form action={confirm} className="mt-5"><button className="btn-navy w-full">Yes, unsubscribe me</button></form>
         </>
       )}

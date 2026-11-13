@@ -53,10 +53,11 @@ export async function computeMetrics(deps: Deps, windowDays = 30): Promise<Metri
     .map((r) => (Date.parse(r.completed_at!) - Date.parse(r.paid_at!)) / 3_600_000)
     .sort((a, b) => a - b);
 
-  const gmv = paid.reduce((s, r) => s + r.price_cents, 0);
-  const refundedAmt = refunded.reduce((s, r) => s + r.price_cents, 0);
-  const stripeFees = paid.reduce((s, r) => s + (r.stripe_fee_cents ?? Math.round(r.price_cents * 0.029) + 30), 0);
-  const refundFeeLoss = refunded.reduce((s, r) => s + (r.stripe_fee_cents ?? Math.round(r.price_cents * 0.029) + 30), 0);
+  const gmv = paid.filter((r) => r.payment_captured_at).reduce((s, r) => s + r.price_cents, 0); // money actually charged
+  // Fees exist only on captured charges; released holds cost nothing.
+  const feeOf = (r: EvalRequest) => (r.payment_captured_at ? r.stripe_fee_cents ?? Math.round(r.price_cents * 0.029) + 30 : 0);
+  const stripeFees = paid.reduce((s, r) => s + feeOf(r), 0);
+  const refundFeeLoss = refunded.reduce((s, r) => s + feeOf(r), 0);
   const kept = completed.filter((r) => r.status === "completed");
   const platformRevenue = kept.reduce((s, r) => s + r.platform_fee_cents, 0);
   const coachPayouts = kept.filter((r) => r.payout_status === "paid").reduce((s, r) => s + r.coach_payout_cents, 0);
@@ -100,7 +101,7 @@ export async function computeMetrics(deps: Deps, windowDays = 30): Promise<Metri
     refundRate: ratio(refunded.length, paid.length),
     medianHoursToDeliver: deliverHours.length ? deliverHours[Math.floor(deliverHours.length / 2)]! : null,
     gmvCents: gmv,
-    netGmvCents: gmv - refundedAmt,
+    netGmvCents: gmv - refunded.filter((r) => r.payment_captured_at).reduce((s, r) => s + r.price_cents, 0),
     platformRevenueCents: platformRevenue,
     stripeFeesCents: stripeFees,
     refundFeeLossCents: refundFeeLoss,

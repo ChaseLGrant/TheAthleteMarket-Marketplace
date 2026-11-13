@@ -204,7 +204,7 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
     await deps.store.updateSettings({
       price_tiers_cents: [...new Set(tiers)].sort((a, b) => a - b),
       commission_bps: Math.round(pct * 100),
-      deadline_days: Math.min(30, Math.max(1, Number(fd.get("deadline_days")) || 7)),
+      deadline_days: Math.min(6, Math.max(1, Number(fd.get("deadline_days")) || 5)), // card holds expire after ~5–7 days
       max_open_requests_per_coach: Math.min(200, Math.max(1, Number(fd.get("max_open")) || 15)),
       retention_days: Math.min(3650, Math.max(30, Number(fd.get("retention_days")) || 365)),
       require_admin_review: fd.get("require_admin_review") === "on",

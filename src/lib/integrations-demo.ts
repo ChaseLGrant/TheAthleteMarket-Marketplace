@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import type Stripe from "stripe";
-import type { AccountStatus, CheckoutArgs, EmailMessage, Mailer, Payments, VideoStorage } from "./integrations";
+import type { AccountStatus, CheckoutArgs, EmailMessage, Mailer, PaymentDetails, Payments, VideoStorage } from "./integrations";
 import { estimateStripeFee } from "./pricing";
 
 /**
@@ -12,6 +12,12 @@ export class FakePayments implements Payments {
   refunds: { id: string; paymentIntentId: string; requestId: string }[] = [];
   transfers: { id: string; group: string; amountCents: number; destination: string; reversed: boolean }[] = [];
   accounts = new Map<string, AccountStatus & { coachId: string }>();
+  /** PaymentIntent status by id: requires_capture (held) → succeeded (captured) | canceled (released). */
+  intents = new Map<string, string>();
+  captures: string[] = [];
+  releases: string[] = [];
+  failCapture = false;
+  failRelease = false;
   failTransfers = false;
   failRefunds = false;
   private idem = new Map<string, unknown>();
@@ -29,12 +35,39 @@ export class FakePayments implements Payments {
       return { id, url };
     });
   }
-  async getPaymentDetails(pi: string) {
+  /** Simulates the customer completing checkout (card hold placed). */
+  authorize(pi: string) { if (!this.intents.has(pi)) this.intents.set(pi, "requires_capture"); }
+  private fee(pi: string) {
     const s = [...this.sessions.values()].find((x) => `pi_demo_${x.requestId}` === pi);
-    return { chargeId: `ch_demo_${pi.slice(8, 20)}`, feeCents: s ? estimateStripeFee(s.amountCents) : 0 };
+    return s ? estimateStripeFee(s.amountCents) : 146;
+  }
+  async getPaymentDetails(pi: string): Promise<PaymentDetails> {
+    const status = this.intents.get(pi) ?? "requires_payment_method";
+    return {
+      status,
+      chargeId: status === "requires_payment_method" ? null : `ch_demo_${pi.slice(8, 20)}`,
+      feeCents: status === "succeeded" ? this.fee(pi) : null,
+      captureBefore: null,
+    };
+  }
+  async capture(a: { paymentIntentId: string }) {
+    if (this.failCapture) throw new Error("Simulated capture failure");
+    const st = this.intents.get(a.paymentIntentId);
+    if (st === "requires_capture") { this.intents.set(a.paymentIntentId, "succeeded"); this.captures.push(a.paymentIntentId); }
+    else if (st !== "succeeded") throw new Error(`Cannot capture payment in status ${st}`);
+    return { chargeId: `ch_demo_${a.paymentIntentId.slice(8, 20)}`, feeCents: this.fee(a.paymentIntentId) };
+  }
+  async releaseHold(a: { paymentIntentId: string }) {
+    if (this.failRelease) throw new Error("Simulated release failure");
+    const st = this.intents.get(a.paymentIntentId);
+    if (st === "canceled") return;
+    if (st === "succeeded") throw new Error("Payment was already captured; a refund is required instead");
+    this.intents.set(a.paymentIntentId, "canceled");
+    this.releases.push(a.paymentIntentId);
   }
   async refund(a: { paymentIntentId: string; requestId: string }) {
     if (this.failRefunds) throw new Error("Simulated refund failure");
+    if (this.intents.get(a.paymentIntentId) !== "succeeded") throw new Error("Cannot refund an uncaptured payment");
     return this.once(`refund-${a.requestId}`, () => {
       const r = { id: `re_demo_${this.refunds.length + 1}`, ...a };
       this.refunds.push(r);

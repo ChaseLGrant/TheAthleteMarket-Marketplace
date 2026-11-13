@@ -75,7 +75,7 @@ export default async function CoachPage({ params }: P) {
               <ul className="mt-4 space-y-2 text-sm text-navy">
                 <li>🎥 30–60 second personal video</li>
                 <li>⏱ Delivered within {settings.deadline_days} days</li>
-                <li>↩︎ Full automatic refund if not delivered</li>
+                <li>💳 Card charged only when delivered</li>
                 <li>🔒 Private link — no account needed</li>
               </ul>
               <Link href={`/coaches/${coach.slug}/request`} className="btn-primary mt-5 w-full">Request evaluation</Link>

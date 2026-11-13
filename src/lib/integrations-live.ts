@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { env } from "./env";
-import type { AccountStatus, CheckoutArgs, EmailMessage, Mailer, Payments, VideoStorage } from "./integrations";
+import type { AccountStatus, CheckoutArgs, EmailMessage, Mailer, PaymentDetails, Payments, VideoStorage } from "./integrations";
 import { supabaseAdmin } from "./store-supabase";
 
 let stripeClient: Stripe | null = null;
@@ -33,6 +33,9 @@ export class StripePayments implements Payments {
           },
         ],
         payment_intent_data: {
+          // Place a hold only. We capture when the coach delivers, and release the hold otherwise,
+          // so declined/expired requests never incur a Stripe processing fee.
+          capture_method: "manual",
           description: `${a.productName} (${a.ref})`,
           transfer_group: `req_${a.requestId}`,
           metadata: { request_id: a.requestId, ref: a.ref, coach_id: a.coachId },
@@ -41,7 +44,7 @@ export class StripePayments implements Payments {
         custom_text: {
           submit: {
             message:
-              "Full automatic refund if the coach declines or doesn't deliver within 7 days. An evaluation is feedback only — not a recruiting offer.",
+              "Your card is only authorized now. You're charged only when your video is delivered — if the coach declines or runs out of time, the hold is released. An evaluation is feedback only, not a recruiting offer.",
           },
         },
         success_url: a.successUrl,
@@ -54,13 +57,41 @@ export class StripePayments implements Payments {
     return { id: s.id, url: s.url };
   }
 
-  async getPaymentDetails(paymentIntentId: string) {
+  async getPaymentDetails(paymentIntentId: string): Promise<PaymentDetails> {
     const pi = await stripe().paymentIntents.retrieve(paymentIntentId, {
       expand: ["latest_charge.balance_transaction"],
     });
     const charge = pi.latest_charge as Stripe.Charge | null;
     const bt = charge?.balance_transaction as Stripe.BalanceTransaction | null | undefined;
-    return { chargeId: charge?.id ?? null, feeCents: bt && typeof bt === "object" ? bt.fee : null };
+    const cb = charge?.payment_method_details?.card?.capture_before;
+    return {
+      status: pi.status,
+      chargeId: charge?.id ?? null,
+      feeCents: bt && typeof bt === "object" ? bt.fee : null,
+      captureBefore: cb ? new Date(cb * 1000) : null,
+    };
+  }
+
+  async capture(a: { paymentIntentId: string; requestId: string }) {
+    const current = await stripe().paymentIntents.retrieve(a.paymentIntentId);
+    if (current.status === "requires_capture") {
+      await stripe().paymentIntents.capture(a.paymentIntentId, {}, { idempotencyKey: `capture-${a.requestId}` });
+    } else if (current.status !== "succeeded") {
+      throw new Error(`Cannot capture payment in status ${current.status}`);
+    }
+    const d = await this.getPaymentDetails(a.paymentIntentId);
+    return { chargeId: d.chargeId, feeCents: d.feeCents };
+  }
+
+  async releaseHold(a: { paymentIntentId: string; requestId: string }) {
+    const pi = await stripe().paymentIntents.retrieve(a.paymentIntentId);
+    if (pi.status === "canceled") return; // already released, or the hold lapsed on its own
+    if (pi.status === "succeeded") throw new Error("Payment was already captured; a refund is required instead");
+    await stripe().paymentIntents.cancel(
+      a.paymentIntentId,
+      { cancellation_reason: "abandoned" },
+      { idempotencyKey: `release-${a.requestId}` },
+    );
   }
 
   async refund(a: { paymentIntentId: string; requestId: string; reason: string }) {

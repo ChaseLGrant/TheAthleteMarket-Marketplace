@@ -17,7 +17,13 @@ export interface CheckoutArgs {
 
 export interface Payments {
   createCheckout(a: CheckoutArgs): Promise<{ id: string; url: string }>;
-  getPaymentDetails(paymentIntentId: string): Promise<{ chargeId: string | null; feeCents: number | null }>;
+  /** Status of the PaymentIntent behind a checkout. `requires_capture` = card hold placed. */
+  getPaymentDetails(paymentIntentId: string): Promise<PaymentDetails>;
+  /** Charge the held card (on delivery). Idempotent. */
+  capture(a: { paymentIntentId: string; requestId: string }): Promise<{ chargeId: string | null; feeCents: number | null }>;
+  /** Release an uncaptured hold. No charge, so no Stripe fee. Idempotent; OK if the hold already lapsed. */
+  releaseHold(a: { paymentIntentId: string; requestId: string }): Promise<void>;
+  /** Refund a CAPTURED payment (Stripe keeps its fee). Admin-only situations. */
   refund(a: { paymentIntentId: string; requestId: string; reason: string }): Promise<{ id: string; status: string }>;
   findTransferForGroup(group: string): Promise<{ id: string } | null>;
   transfer(a: {
@@ -30,6 +36,14 @@ export interface Payments {
   createDashboardLink(accountId: string): Promise<{ url: string }>;
   getAccountStatus(accountId: string): Promise<AccountStatus>;
   constructEvent(rawBody: string, signature: string): Stripe.Event;
+}
+
+export interface PaymentDetails {
+  status: string; // requires_capture | succeeded | canceled | requires_payment_method | ...
+  chargeId: string | null;
+  feeCents: number | null;
+  /** Latest moment the hold can be captured (from the card network), if known. */
+  captureBefore: Date | null;
 }
 
 export interface AccountStatus {

@@ -59,8 +59,8 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
       <div className="card p-6 text-center">
         <h1 className="text-xl font-bold">This request is closed</h1>
         <p className="mt-2 text-muted">
-          {req.status === "declined" || req.decline_reason ? "You declined this request and the family was refunded." :
-            "The deadline passed, so the family was refunded in full. No action is needed."}
+          {req.status === "declined" || req.decline_reason ? "You declined this request, so the family wasn't charged." :
+            "The deadline passed, so the family wasn't charged. No action is needed."}
         </p>
       </div>
     );
@@ -113,7 +113,7 @@ export default async function CoachRequestPage({ params }: { params: Promise<{ t
         Payment is sent via Stripe after you submit. First time? You&apos;ll complete a quick, secure Stripe payout setup — we never see your bank login.
       </Notice>
       <p className="pb-6 text-center text-sm">
-        <Link href={`/r/${token}/decline`} className="font-medium text-muted underline">Can&apos;t do this one? Decline and refund the family</Link>
+        <Link href={`/r/${token}/decline`} className="font-medium text-muted underline">Can&apos;t do this one? Decline it</Link>
       </p>
     </div>
   );

@@ -38,7 +38,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
         {r.status === "completed" && ["pending", "blocked", "failed"].includes(r.payout_status) && <ActionForm action={requestAction} fields={{ ...f, op: "retry_payout" }} label="Retry payout" />}
         {r.payout_status === "paid" && <ActionForm action={requestAction} fields={{ ...f, op: "reverse_payout" }} label="Reverse coach transfer" tone="danger" confirm="Pull the payout back from the coach's Stripe balance?" />}
         {r.stripe_payment_intent_id && r.status !== "refunded" && r.payout_status !== "paid" && (
-          <ActionForm action={requestAction} fields={{ ...f, op: "refund" }} label="Full refund" tone="danger" confirm={`Refund ${money(r.price_cents)} to ${r.purchaser_email}?`} />
+          <ActionForm action={requestAction} fields={{ ...f, op: "refund" }} label={r.payment_captured_at ? "Full refund (Stripe keeps fee)" : "Cancel & release card hold"} tone="danger" confirm={r.payment_captured_at ? `Refund ${money(r.price_cents)} to ${r.purchaser_email}? Stripe keeps its fee.` : `Release the hold? ${r.purchaser_email} will not be charged.`} />
         )}
         {r.video_path && <ActionForm action={requestAction} fields={{ ...f, op: "delete_video" }} label="Delete video" tone="danger" confirm="Permanently delete the video file?" />}
       </section>
@@ -63,6 +63,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
             <dt className="text-muted">Price</dt><dd>{money(r.price_cents)}</dd>
             <dt className="text-muted">Commission</dt><dd>{money(r.platform_fee_cents)}</dd>
             <dt className="text-muted">Coach payout</dt><dd>{money(r.coach_payout_cents)}</dd>
+            <dt className="text-muted">Card</dt><dd>{r.payment_captured_at ? `Charged ${dateTime(r.payment_captured_at)}` : r.stripe_payment_intent_id ? `Hold only${r.authorization_expires_at ? ` (expires ${dateTime(r.authorization_expires_at)})` : ""}` : "—"}</dd>
             <dt className="text-muted">Stripe fee</dt><dd>{r.stripe_fee_cents == null ? "—" : money(r.stripe_fee_cents)}</dd>
             <dt className="text-muted">Payment</dt><dd>{r.stripe_payment_intent_id ? <a className="text-blue" href={`${stripeBase}/payments/${r.stripe_payment_intent_id}`} target="_blank" rel="noreferrer">{r.stripe_payment_intent_id}</a> : "—"}</dd>
             <dt className="text-muted">Transfer</dt><dd>{r.stripe_transfer_id ? <a className="text-blue" href={`${stripeBase}/connect/transfers/${r.stripe_transfer_id}`} target="_blank" rel="noreferrer">{r.stripe_transfer_id}</a> : "—"}</dd>

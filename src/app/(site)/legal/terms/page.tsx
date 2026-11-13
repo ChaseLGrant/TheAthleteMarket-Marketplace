@@ -7,12 +7,12 @@ export default function Terms() {
       <p>The Athlete Market (&ldquo;we&rdquo;) lets you request a short, recorded video evaluation (&ldquo;Evaluation&rdquo;) of an athlete&apos;s highlight film from an independent evaluator (&ldquo;Coach&rdquo;). Coaches are independent and are not our employees or agents.</p>
       <h2>2. No recruiting promise</h2>
       <p>An Evaluation is one person&apos;s opinion. It is not a recruiting contact, offer, scholarship, admission decision, roster spot, or endorsement by any coach, school, conference or governing body. We do not guarantee any athletic, academic or recruiting outcome.</p>
-      <h2>3. Payment, delivery and refunds</h2>
+      <h2>3. Payment, delivery and cancellations</h2>
       <ul>
-        <li>You pay the listed price at checkout through Stripe. We do not store card numbers.</li>
-        <li>The Coach has the stated delivery window (currently 7 days) to record. If they decline, don&apos;t deliver in time, or become unavailable, we automatically refund the full amount to your original payment method.</li>
+        <li>At checkout, Stripe places an authorization hold for the listed price on your card. Your card is charged only when the Coach delivers the video. We do not store card numbers.</li>
+        <li>The Coach has the stated delivery window (currently 5 days) to record. If they decline, don&apos;t deliver in time, or become unavailable, we release the hold and you are not charged. How quickly a released hold disappears from your statement depends on your bank.</li>
         <li>Once a qualifying video is delivered, the purchase is complete. If you believe a video is not a genuine good-faith evaluation, contact us within 14 days and we will review it.</li>
-        <li>Refund timing after we issue it depends on your bank (typically 5–10 business days).</li>
+        <li>If a refund of a charged payment is approved, timing depends on your bank (typically 5–10 business days).</li>
       </ul>
       <h2>4. Minors</h2>
       <p>Requests for athletes under 18 must be placed by a parent or legal guardian, who consents to sharing the athlete&apos;s information with the selected Coach.</p>

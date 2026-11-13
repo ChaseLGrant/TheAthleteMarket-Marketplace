@@ -7,18 +7,18 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
 | Service | Purpose | Cost to start |
 |---|---|---|
 | GitHub | Code (this repo) | Free |
-| Vercel | Hosting, cron jobs, SSL | **Pro ($20/mo) needed** for the 15-minute cron (Hobby only runs crons once a day) |
-| Supabase | Postgres + private video storage | Free tier works for the pilot; Pro ($25/mo) recommended for daily backups + larger uploads |
+| Vercel | Hosting, daily cron job, SSL | **Free (Hobby) works.** The cron runs once a day |
+| Supabase | Postgres + private video storage | You already have Pro (daily backups, large uploads) |
 | Stripe | Checkout, refunds, Connect payouts | Pay-as-you-go |
 | Resend | Transactional email | Free up to 3,000 emails/month |
 
 ## 1. Supabase
 
 1. Create a project (region close to your users, e.g. `us-east-1`).
-2. **SQL Editor →** paste and run `supabase/migrations/0001_init.sql`. It creates all tables, locks them down with RLS,
+2. **SQL Editor →** paste and run `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_authorize_then_capture.sql`. It creates all tables, locks them down with RLS,
    and creates the private `evaluation-videos` bucket (500 MB file limit, video types only).
-3. **Storage → Settings:** make sure the *global* upload size limit is at least 500 MB (Free plan is capped at 50 MB — a
-   60-second phone video recorded in-browser is ~15–25 MB, but uploaded camera-roll files can be larger).
+3. **Storage → Settings:** set the *global* upload size limit to at least 500 MB (Pro allows this; a 60-second in-browser
+   recording is ~15–25 MB, but camera-roll uploads can be larger).
 4. **Project Settings → API:** copy the Project URL → `NEXT_PUBLIC_SUPABASE_URL`, and the `service_role` key → `SUPABASE_SERVICE_ROLE_KEY`.
    The service role key is server-only; never put it in a `NEXT_PUBLIC_` variable.
 5. (Staging only) run `supabase/seed.sql` after replacing the email with an inbox you control.
@@ -37,9 +37,13 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
      → signing secret → `STRIPE_WEBHOOK_SECRET`
    * **"Events on connected accounts"**: `account.updated`, `payout.failed`
      → signing secret → `STRIPE_CONNECT_WEBHOOK_SECRET`
-5. **Settings → Payment methods:** keep cards + Apple Pay + Google Pay. Leave delayed methods (ACH etc.) off for the pilot.
-6. Apple Pay: **Settings → Payment method domains** → add `marketplace.theathletemarket.com`.
-7. Bank deposit timing for coaches follows each connected account's Stripe payout schedule (US default is usually 2 business days
+5. **Settings → Payment methods:** cards + Apple Pay + Google Pay only. Leave ACH/bank debits, Klarna, Afterpay, Cash App etc.
+   **off** — the app places a card *hold* and charges on delivery, which only card-type methods support.
+6. **Radar → Rules** (fraud / wrong-card protection): make sure "Block if CVC verification fails" and "Block if postal code
+   verification fails" are **enabled**. Combined with the hold, a card that's wrong, declined or has insufficient funds is
+   rejected at checkout and the coach is never emailed.
+7. Apple Pay: **Settings → Payment method domains** → add `marketplace.theathletemarket.com`.
+8. Bank deposit timing for coaches follows each connected account's Stripe payout schedule (US default is usually 2 business days
    after funds are available). Because transfers use `source_transaction`, a transfer waits until the original charge's funds are available.
 
 **Local webhook testing:**
@@ -69,9 +73,12 @@ openssl rand -base64 48
 
    Use a different value for each of `APP_SECRET`, `CRON_SECRET`, and `ADMIN_PASSWORD`. Do **not** set `DEMO_MODE`.
 4. Deploy. Check `https://<project>.vercel.app/api/health` — every `configured` flag should be `true` and `db` should be `ok`.
-5. Cron: `vercel.json` schedules `/api/cron` every 15 minutes; Vercel sends `Authorization: Bearer $CRON_SECRET` automatically.
-   (On the Hobby plan, change the schedule to once a day, e.g. `0 14 * * *`. The 7-day deadline then runs up to ~24 h late,
-   which delays refunds. Pro is strongly recommended.)
+5. Cron: `vercel.json` runs `/api/cron` once a day (14:00 UTC; Hobby may run it any time within that hour). Vercel sends
+   `Authorization: Bearer $CRON_SECRET` automatically. What runs immediately vs. daily:
+   * **Immediate** (no cron needed): checkout, coach email, coach decline → hold released, video submit → charge → delivery → payout,
+     and rejecting submissions after the deadline.
+   * **Daily**: releasing holds for coaches who never responded (up to ~24 h after the deadline — the family was never charged,
+     they just see the pending hold slightly longer), reminders, retries of anything that failed, data retention.
 
 ## 5. Domain: marketplace.theathletemarket.com
 
@@ -125,12 +132,13 @@ generated Open Graph image. After launch: add the property in Google Search Cons
 
 1. `/api/health` all green.
 2. Create a coach in admin with *your* email, verified + approved, $30.
-3. Request an evaluation with card `4242 4242 4242 4242` → receipt email + coach email arrive.
+3. Request an evaluation with card `4242 4242 4242 4242` → in Stripe the payment shows **Uncaptured**; receipt + coach email arrive.
+   Also try `4000 0000 0000 0002` (declined) → checkout refuses it and no coach email is sent.
 4. Open the coach link on an **iPhone (Safari)** and an **Android (Chrome)**: record, retake, submit. Also try "Upload a video instead".
 5. Family email → video plays on iPhone, Android and desktop.
-6. Payout setup email → complete Stripe Express onboarding (test mode: use Stripe's test SSN `000-00-0000` and test bank) → transfer appears in Stripe.
-7. Second request → Decline → refund appears in Stripe + refund email.
-8. Third request → in Supabase set `expires_at` to the past → wait for cron (or call `/api/cron` with the bearer secret) → refund.
+6. After submitting, the Stripe payment changes to **Succeeded** (captured). Payout setup email → complete Stripe Express onboarding (test mode: use Stripe's test SSN `000-00-0000` and test bank) → transfer appears in Stripe.
+7. Second request → Decline → the Stripe payment shows **Canceled** (no fee) + "You weren't charged" email.
+8. Third request → in Supabase set `expires_at` to the past → call `/api/cron` with the bearer secret → hold released.
 9. Stripe Dashboard → trigger a test dispute (card `4000 0000 0000 0259`) → admin alert + payout held.
 10. Then switch keys to live mode, create live webhook endpoints, and repeat steps 3–7 once with a real card.
 

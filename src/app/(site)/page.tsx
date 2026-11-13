@@ -18,7 +18,7 @@ const FAQ = [
   },
   {
     q: "What if the coach doesn't respond?",
-    a: "Coaches have 7 days. If they decline or don't deliver in time, you're refunded in full automatically — no forms, no emails.",
+    a: "Coaches have 5 days. Your card is only held at checkout and charged when the video is delivered. If they decline or run out of time, the hold is released and you're never charged.",
   },
   {
     q: "Is this a recruiting offer?",
@@ -53,7 +53,7 @@ export default async function Home() {
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-60" style={{ background: "radial-gradient(60rem 30rem at 85% -10%, rgba(31,95,255,.55), transparent 60%), radial-gradient(40rem 20rem at 0% 120%, rgba(31,95,255,.35), transparent 60%)" }} />
         <div className="container-page relative py-16 sm:py-24">
           <p className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-[#BFD0FF] ring-1 ring-white/15">
-            Delivered in 7 days or a full refund
+            Charged only when your video is delivered
           </p>
           <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
             Honest feedback on your film from a college-level coach.
@@ -118,14 +118,14 @@ export default async function Home() {
       <section className="container-page py-16">
         <div className="grid items-center gap-8 rounded-3xl bg-blue-50 p-8 sm:p-12 md:grid-cols-[1.2fr_1fr]">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Video or your money back. Automatically.</h2>
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">No video, no charge. Automatically.</h2>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              You pay once at checkout. If the coach declines or doesn&apos;t record within 7 days, Stripe returns every cent to your card —
-              you don&apos;t have to ask. Coaches are paid only after they deliver.
+              We place a hold on your card at checkout and charge it only when your video is delivered. If the coach declines or doesn&apos;t
+              record within {settings.deadline_days} days, the hold is released — you&apos;re never charged, and you don&apos;t have to ask.
             </p>
           </div>
           <dl className="grid grid-cols-2 gap-3 text-center">
-            {[["30–60s", "personal video"], ["7 days", "delivery window"], ["100%", "refund if no video"], ["0", "accounts or apps"]].map(([k, v]) => (
+            {[["30–60s", "personal video"], [`${settings.deadline_days} days`, "delivery window"], ["$0", "charged if no video"], ["0", "accounts or apps"]].map(([k, v]) => (
               <div key={v} className="rounded-2xl bg-white p-4 ring-1 ring-blue-100">
                 <dt className="text-2xl font-bold text-navy">{k}</dt>
                 <dd className="text-xs text-muted">{v}</dd>

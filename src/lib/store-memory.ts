@@ -93,7 +93,7 @@ export class MemoryStore implements Store {
       id: randomUUID(), status: "awaiting_payment", payout_status: "none", refund_status: "none",
       coach_link_nonce: randomBytes(16).toString("hex"), delivery_link_nonce: randomBytes(16).toString("hex"),
       created_at: nowIso(), updated_at: nowIso(), reminder_count: 0, refund_attempts: 0, payout_attempts: 0,
-      video_view_count: 0, stripe_fee_cents: null, stripe_checkout_session_id: null, stripe_payment_intent_id: null,
+      video_view_count: 0, stripe_fee_cents: null, payment_captured_at: null, authorization_expires_at: null, stripe_checkout_session_id: null, stripe_payment_intent_id: null,
       stripe_charge_id: null, stripe_refund_id: null, stripe_transfer_id: null, stripe_dispute_id: null,
       dispute_status: null, payout_block_reason: null, last_error: null, paid_at: null, expires_at: null,
       coach_notified_at: null, coach_viewed_at: null, accepted_at: null, submitted_at: null, completed_at: null,

@@ -137,10 +137,10 @@ export function RequestForm(p: Props) {
 
       <div className="space-y-3">
         <button className="btn-primary w-full text-[17px]" disabled={pending}>
-          {pending ? "Opening secure checkout…" : `Continue to payment · ${p.priceLabel}`}
+          {pending ? "Opening secure checkout…" : `Continue to secure checkout · ${p.priceLabel}`}
         </button>
         <p className="text-center text-xs leading-relaxed text-muted">
-          Secure checkout by Stripe. If {p.coachFirstName} declines or doesn&apos;t deliver within {p.deadlineDays} days, you&apos;re refunded in full automatically.
+          Secure checkout by Stripe. We place a hold on your card now and <strong>only charge it when your video is delivered</strong>. If {p.coachFirstName} declines or doesn&apos;t deliver within {p.deadlineDays} days, the hold is released and you&apos;re never charged.
         </p>
       </div>
     </form>

@@ -9,13 +9,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(site),
   title: { default: "College Coach Video Evaluations | The Athlete Market", template: "%s | The Athlete Market" },
   description:
-    "Get a personal 30–60 second video evaluation of your highlight film from a verified college-level coach. Delivered in 7 days or a full refund. No accounts, no app.",
+    "Get a personal 30–60 second video evaluation of your highlight film from a verified college-level coach. You're only charged when your video is delivered. No accounts, no app.",
   applicationName: "The Athlete Market Evaluations",
   openGraph: {
     type: "website",
     siteName: "The Athlete Market",
     title: "Honest feedback on your film from a college-level coach",
-    description: "Personal 30–60 second video evaluations. Delivered in 7 days or your money back.",
+    description: "Personal 30–60 second video evaluations. Charged only when delivered.",
     url: site,
   },
   twitter: { card: "summary_large_image" },

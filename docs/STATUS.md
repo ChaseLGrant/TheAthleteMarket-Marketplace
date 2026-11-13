@@ -4,10 +4,12 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 
 ## Verified in this repo
 
-* **39 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
+* **44 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
   lifecycle against an in-memory database with simulated Stripe and email: duplicate webhooks, concurrent payouts (exactly one
   transfer), late submissions rejected after the deadline, expiry → single refund, decline → single refund, failed refund retried
-  by cron, refund blocked after payout, dispute holds payout until won, opt-out refunds open requests, coach capacity, rate limits.
+  by cron, refund blocked after payout, dispute holds payout until won, opt-out refunds open requests, coach capacity, rate limits, and the card-hold model: coach never emailed without a successful
+  hold, charge only on submit, declines/expiries cost $0 in fees, failed charge withholds the video and coach payout until
+  retried, deadline clamped before the hold expires, already-lapsed holds close cleanly.
 * **Production build** succeeds (Next.js 16, TypeScript strict).
 * **End-to-end browser run** in demo mode (Chromium, iPhone 13 emulation, fake camera): search, directory-listing block,
   form validation, checkout, coach email link, in-browser recording, upload with progress, family playback, Stripe onboarding
@@ -23,7 +25,8 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 | Resend delivery + inbox placement | No API key or verified domain | Send the smoke-test emails to Gmail and Outlook |
 | Recording on **real** iPhone Safari / Android Chrome | Only emulated Chromium was tested | Smoke test §9.4 on physical phones |
 | Playback of WebM recordings on older iPhones | Recorder prefers MP4 (Safari, Chrome 126+ record MP4); some Android/Firefox browsers record WebM, which iOS before 17.4 may not play | If it appears in testing, add server-side transcoding (Mux or Cloudflare Stream) |
-| Vercel Cron cadence | Needs Pro plan for every-15-minutes | Check Vercel → Cron Jobs after deploy |
+| Stripe manual capture + `capture_before` | Needs Stripe keys | Smoke test §9.3/§9.6/§9.7: payment goes Uncaptured → Succeeded or Canceled |
+| Vercel daily cron | Needs deployment | Check Vercel → Cron Jobs after deploy |
 
 ## Known limitations / next steps
 

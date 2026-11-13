@@ -38,12 +38,12 @@ describe("checkout", () => {
 });
 
 describe("payment webhook", () => {
-  it("marks paid, sets 7-day deadline, emails coach once and purchaser once, even when delivered twice", async () => {
+  it("marks paid, sets 5-day deadline, emails coach once and purchaser once, even when delivered twice", async () => {
     const { deps } = makeDeps();
     const coach = await addCoach(deps);
     const req = await paidRequest(deps);
     expect(req.status).toBe("coach_notified");
-    expect(new Date(req.expires_at!).getTime() - new Date(req.paid_at!).getTime()).toBe(7 * 86_400_000);
+    expect(new Date(req.expires_at!).getTime() - new Date(req.paid_at!).getTime()).toBe(5 * 86_400_000);
     await handleCheckoutPaid(deps, { id: req.stripe_checkout_session_id!, payment_status: "paid", payment_intent: req.stripe_payment_intent_id, client_reference_id: req.id, amount_total: 4000 });
     const invites = deps.mailer.sent.filter((m) => m.to === coach.email);
     expect(invites).toHaveLength(1);
@@ -57,6 +57,7 @@ describe("payment webhook", () => {
     const { deps } = makeDeps();
     await addCoach(deps);
     const { requestId } = await createRequestAndCheckout(deps, input(), { ip: "x" });
+    deps.payments.authorize(`pi_demo_${requestId}`);
     const evt = {
       id: "evt_1", type: "checkout.session.completed",
       data: { object: { id: "cs_1", payment_status: "paid", payment_intent: `pi_demo_${requestId}`, client_reference_id: requestId, amount_total: 4000, metadata: {} } },
@@ -79,10 +80,12 @@ describe("payment webhook", () => {
     const coach = await addCoach(deps);
     const { requestId } = await createRequestAndCheckout(deps, input(), { ip: "x" });
     await deps.store.updateCoach(coach.id, { eligibility_status: "suspended" });
+    deps.payments.authorize(`pi_demo_${requestId}`);
     await handleCheckoutPaid(deps, { id: "cs", payment_status: "paid", payment_intent: `pi_demo_${requestId}`, client_reference_id: requestId, amount_total: 4000 });
     const r = (await deps.store.getRequest(requestId))!;
     expect(r.status).toBe("refunded");
-    expect(deps.payments.refunds).toHaveLength(1);
+    expect(deps.payments.releases).toHaveLength(1); // hold released, never charged
+    expect(deps.payments.refunds).toHaveLength(0);
   });
 
   it("retries a failed coach email from cron without duplicating", async () => {
@@ -119,6 +122,7 @@ describe("fulfillment + payout", () => {
     expect(req.payout_status).toBe("paid");
     expect(deps.payments.transfers).toHaveLength(1);
     expect(deps.payments.transfers[0]!.amountCents).toBe(4000);
+    expect(deps.payments.captures).toHaveLength(1);
 
     // Repeated / concurrent payout attempts never double pay
     await Promise.all([attemptPayout(deps, req.id), attemptPayout(deps, req.id), runCron(deps)]);
@@ -157,8 +161,9 @@ describe("fulfillment + payout", () => {
     await runCron(deps);
     const r = (await deps.store.getRequest(req.id))!;
     expect(r.status).toBe("refunded");
-    expect(deps.payments.refunds).toHaveLength(1);
-    expect(deps.mailer.sent.filter((m) => m.subject.startsWith("Full refund"))).toHaveLength(1);
+    expect(deps.payments.releases).toHaveLength(1);
+    expect(deps.payments.captures).toHaveLength(0);
+    expect(deps.mailer.sent.filter((m) => m.subject.startsWith("You weren't charged"))).toHaveLength(1);
     const path = await upload(deps, req.id);
     await expect(submitVideo(deps, r, { path, durationSeconds: 45, attest: true })).rejects.toThrow();
   });
@@ -197,19 +202,20 @@ describe("decline + refunds", () => {
     await Promise.all([declineRequest(deps, req, "busy"), declineRequest(deps, req, "busy")]);
     const r = (await deps.store.getRequest(req.id))!;
     expect(r.status).toBe("refunded");
-    expect(deps.payments.refunds).toHaveLength(1);
+    expect(deps.payments.releases).toHaveLength(1);
+    expect(deps.payments.refunds).toHaveLength(0);
     const path = await upload(deps, req.id);
     await expect(submitVideo(deps, r, { path, durationSeconds: 45, attest: true })).rejects.toThrow();
   });
 
-  it("failed refunds are retried by cron until they succeed", async () => {
+  it("failed hold releases are retried by cron until they succeed", async () => {
     const { deps } = makeDeps();
     await addCoach(deps);
     const req = await paidRequest(deps);
-    deps.payments.failRefunds = true;
+    deps.payments.failRelease = true;
     await declineRequest(deps, req, null);
     expect((await deps.store.getRequest(req.id))!.refund_status).toBe("failed");
-    deps.payments.failRefunds = false;
+    deps.payments.failRelease = false;
     await runCron(deps);
     expect((await deps.store.getRequest(req.id))!.status).toBe("refunded");
   });
@@ -246,5 +252,80 @@ describe("disputes", () => {
     expect(deps.payments.transfers).toHaveLength(0);
     await handleDispute(deps, { id: "dp_1", charge: null, payment_intent: req.stripe_payment_intent_id, amount: 4000, reason: "fraudulent", status: "won" });
     expect((await deps.store.getRequest(req.id))!.payout_status).toBe("paid");
+  });
+});
+
+describe("card hold: charge only on delivery", () => {
+  it("never emails the coach unless the card hold actually succeeded (bad card = no work)", async () => {
+    const { deps } = makeDeps();
+    await addCoach(deps);
+    const { requestId } = await createRequestAndCheckout(deps, input(), { ip: "x" });
+    // Card declined / never authorized: Stripe would not complete checkout, but even a stray event must not trigger work.
+    await handleCheckoutPaid(deps, { id: "cs", payment_status: "paid", payment_intent: `pi_demo_${requestId}`, client_reference_id: requestId, amount_total: 4000 });
+    expect((await deps.store.getRequest(requestId))!.status).toBe("awaiting_payment");
+    expect(deps.mailer.sent.filter((m) => m.to === "pat@example.com")).toHaveLength(0);
+  });
+
+  it("holds at checkout, charges only when the coach submits", async () => {
+    const { deps } = makeDeps();
+    await addCoach(deps);
+    const req = await paidRequest(deps);
+    expect(req.payment_captured_at).toBeNull();
+    expect(deps.payments.captures).toHaveLength(0);
+    const done = await submitVideo(deps, req, { path: await upload(deps, req.id), durationSeconds: 40, attest: true });
+    expect(done.status).toBe("completed");
+    expect(done.payment_captured_at).not.toBeNull();
+    expect(deps.payments.captures).toEqual([req.stripe_payment_intent_id]);
+  });
+
+  it("if the charge fails, the family does not get the video and the coach is not paid; cron retries", async () => {
+    const { deps } = makeDeps();
+    const coach = await addCoach(deps);
+    await onboard(deps, coach.id);
+    const req = await paidRequest(deps);
+    deps.payments.failCapture = true;
+    const r = await submitVideo(deps, req, { path: await upload(deps, req.id), durationSeconds: 40, attest: true });
+    expect(r.status).toBe("submitted");
+    expect(deps.mailer.sent.some((m) => m.to === "parent@example.com" && /evaluation$/.test(m.subject))).toBe(false);
+    expect(deps.payments.transfers).toHaveLength(0);
+    deps.payments.failCapture = false;
+    await runCron(deps);
+    const after = (await deps.store.getRequest(req.id))!;
+    expect(after.status).toBe("completed");
+    expect(after.payout_status).toBe("paid");
+  });
+
+  it("declines and expiries cost $0 in Stripe fees", async () => {
+    const { deps, advance } = makeDeps();
+    await addCoach(deps);
+    const a = await paidRequest(deps);
+    await declineRequest(deps, a, null);
+    await paidRequest(deps, { purchaserEmail: "b@example.com" });
+    advance(6 * 24);
+    await runCron(deps);
+    expect(deps.payments.captures).toHaveLength(0);
+    expect(deps.payments.refunds).toHaveLength(0);
+    expect(deps.payments.releases).toHaveLength(2);
+  });
+
+  it("deadline ends before the card hold expires so delivery can always be charged", async () => {
+    const { deps } = makeDeps();
+    await addCoach(deps);
+    await deps.store.updateSettings({ deadline_days: 6 });
+    const captureBefore = new Date(deps.now().getTime() + 5 * 86_400_000);
+    const orig = deps.payments.getPaymentDetails.bind(deps.payments);
+    deps.payments.getPaymentDetails = async (pi: string) => ({ ...(await orig(pi)), captureBefore });
+    const req = await paidRequest(deps);
+    expect(Date.parse(req.expires_at!)).toBe(captureBefore.getTime() - 12 * 3_600_000);
+  });
+
+  it("an already-lapsed hold still closes the request cleanly", async () => {
+    const { deps, advance } = makeDeps();
+    await addCoach(deps);
+    const req = await paidRequest(deps);
+    deps.payments.intents.set(req.stripe_payment_intent_id!, "canceled"); // bank dropped the hold on its own
+    advance(6 * 24);
+    await runCron(deps);
+    expect((await deps.store.getRequest(req.id))!.status).toBe("refunded");
   });
 });

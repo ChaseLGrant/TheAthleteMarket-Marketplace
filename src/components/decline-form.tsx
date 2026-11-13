@@ -7,7 +7,7 @@ export function DeclineForm({ token }: { token: string }) {
   const [reason, setReason] = useState(REASONS[0]!);
   const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
-  if (state === "done") return <p className="mt-4 rounded-xl bg-success-50 p-4 text-sm font-medium text-[#0b4f2a]">Declined. The family has been refunded. Thanks for letting us know.</p>;
+  if (state === "done") return <p className="mt-4 rounded-xl bg-success-50 p-4 text-sm font-medium text-[#0b4f2a]">Declined. The family won't be charged. Thanks for letting us know.</p>;
   return (
     <form
       className="mt-4 space-y-3"
@@ -28,7 +28,7 @@ export function DeclineForm({ token }: { token: string }) {
         ))}
       </fieldset>
       {state === "error" && <p className="field-error">{msg}</p>}
-      <button className="btn-danger w-full" disabled={state === "busy"}>{state === "busy" ? "Declining…" : "Decline and refund family"}</button>
+      <button className="btn-danger w-full" disabled={state === "busy"}>{state === "busy" ? "Declining…" : "Decline this request"}</button>
     </form>
   );
 }

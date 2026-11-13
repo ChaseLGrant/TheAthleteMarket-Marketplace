@@ -17,7 +17,7 @@ export default function Join() {
           <li><strong className="text-navy">Requests come to your inbox.</strong> Each email has the athlete, the film and what you&apos;ll earn.</li>
           <li><strong className="text-navy">Record 30–60 seconds in your browser.</strong> No app, no account, no password.</li>
           <li><strong className="text-navy">Paid automatically via Stripe</strong> after you deliver. You keep 100% of the listed price during our pilot.</li>
-          <li><strong className="text-navy">Always optional.</strong> Decline anything with one tap; the family is refunded.</li>
+          <li><strong className="text-navy">Always optional.</strong> Decline anything with one tap; the family is never charged.</li>
         </ul>
         <div className="mt-8 rounded-2xl bg-blue-50 p-5 text-sm leading-relaxed text-navy ring-1 ring-blue-100">
           <p className="font-semibold">Currently on a college staff?</p>

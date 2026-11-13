@@ -29,7 +29,7 @@ export type NewRequest = Omit<
   EvalRequest,
   | "id" | "status" | "payout_status" | "refund_status" | "coach_link_nonce" | "delivery_link_nonce"
   | "created_at" | "updated_at" | "reminder_count" | "refund_attempts" | "payout_attempts" | "video_view_count"
-  | "stripe_fee_cents" | "stripe_checkout_session_id" | "stripe_payment_intent_id" | "stripe_charge_id"
+  | "stripe_fee_cents" | "payment_captured_at" | "authorization_expires_at" | "stripe_checkout_session_id" | "stripe_payment_intent_id" | "stripe_charge_id"
   | "stripe_refund_id" | "stripe_transfer_id" | "stripe_dispute_id" | "dispute_status" | "payout_block_reason"
   | "last_error" | "paid_at" | "expires_at" | "coach_notified_at" | "coach_viewed_at" | "accepted_at"
   | "submitted_at" | "completed_at" | "delivered_at" | "declined_at" | "decline_reason" | "expired_at"
@@ -94,7 +94,7 @@ export interface Store {
 export const DEFAULT_SETTINGS: Settings = {
   price_tiers_cents: [3000, 4000, 5000],
   commission_bps: 0,
-  deadline_days: 7,
+  deadline_days: 5,
   max_open_requests_per_coach: 15,
   require_admin_review: false,
   allow_active_college_coaches: false,

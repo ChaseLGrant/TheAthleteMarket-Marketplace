@@ -17,7 +17,7 @@ export default async function DeclinePage({ params }: { params: Promise<{ token:
       {open ? (
         <>
           <h1 className="text-xl font-bold">Decline {req.athlete_name}&apos;s request?</h1>
-          <p className="mt-2 text-sm text-muted">The family will be refunded in full automatically. Totally fine — participation is always optional.</p>
+          <p className="mt-2 text-sm text-muted">The family won&apos;t be charged. Totally fine — participation is always optional.</p>
           <DeclineForm token={token} />
         </>
       ) : (

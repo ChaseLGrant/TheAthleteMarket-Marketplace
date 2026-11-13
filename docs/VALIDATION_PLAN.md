@@ -6,7 +6,7 @@ Goal: prove four things with real money before scaling. A $10M+ valuation is an 
 |---|---|---|---|
 | Will families pay? | Checkout conversion (paid ÷ checkouts started) | ≥ 35% | < 15% |
 | Will coaches deliver? | Completion (delivered ÷ notified) | ≥ 80% | < 60% |
-| Is it worth it? | Refund rate | ≤ 15% | > 30% |
+| Is it worth it? | "Refund" rate (released holds + refunds) | ≤ 15% | > 30% |
 | Do they come back? | Repeat purchase rate | ≥ 20% within 60 days | < 5% |
 | Can we acquire profitably? | CAC vs. contribution per order | CAC < $25 | CAC > $60 |
 
@@ -38,8 +38,9 @@ Also watch: median hours to deliver (target < 72 h), profile view → paid, and 
 
 ## Unit economics to keep in mind
 
-* Pilot (0% commission): the platform **loses** about $1.17–$1.75 per order in Stripe fees, plus the fee on every refunded
-  charge. 100 orders costs roughly $150–$250 in fees. That is the price of learning.
+* Pilot (0% commission): the platform pays Stripe's fee (~$1.17–$1.75) **only on delivered orders**. Declined or expired
+  requests are never charged, so they cost $0. 100 delivered orders ≈ $150 in fees. That is the price of learning.
+* Remaining fee risks: an admin refund of an already-charged order (Stripe keeps the fee) and chargebacks ($15 dispute fee).
 * At a 20% take rate on $40, the platform keeps $8 − ~$1.46 fee ≈ **$6.54 contribution** per delivered order before CAC.
   Paid acquisition only works if CAC is low or repeat purchases are high, which is why repeat rate matters most.
 

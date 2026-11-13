@@ -4,13 +4,14 @@
 and gets a private 30–60 second video evaluation of their athlete's film. No customer or coach accounts, no passwords, no app.
 
 ```
-Family: search → pick coach → one-page form → Stripe Checkout
-                                                  │ webhook (idempotent)
+Family: search → pick coach → one-page form → Stripe Checkout (card HOLD only — not charged yet)
+                                                  │ webhook confirms the hold succeeded (idempotent)
 Coach:  email with "Review & Record" magic link ──┘
         → watches film → records in browser (or uploads) → "Submit Video & Claim $40"
+Card:   charged at this moment (capture) — only when a video is delivered
 Family: email with private video link
 Coach:  one-time Stripe Connect onboarding → automatic transfer
-No video in 7 days / coach declines → automatic full refund
+No video in 5 days / coach declines → hold released: never charged, $0 Stripe fee
 ```
 
 ## Try it in 60 seconds (no credentials)
@@ -33,7 +34,7 @@ Demo mode refuses to start on a Vercel production deployment.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Local dev server |
-| `npm test` | 39 unit/integration tests for money + state logic (Vitest) |
+| `npm test` | 44 unit/integration tests for money + state logic (Vitest) |
 | `npm run typecheck` | TypeScript |
 | `npm run build` | Production build |
 
@@ -60,6 +61,10 @@ Demo mode refuses to start on a Vercel production deployment.
 * Stripe webhooks are recorded in `stripe_events`; a processed event id is never applied twice.
 * Payouts: request must be `completed`, payout claimed `pending→processing` atomically, existing transfer for the
   `transfer_group` is looked up before creating one, and Stripe idempotency key `transfer-<request id>` is used.
+* Families are charged only on delivery: Checkout uses `capture_method=manual`; the card is captured when the coach submits.
+  Declines/expiries cancel the hold (no Stripe fee). The coach deadline always ends ≥12 h before the card hold expires
+  (`capture_before` from the card network), so a delivered video can always be charged. The coach is only emailed after
+  Stripe confirms the hold succeeded, and coaches are only paid from captured money.
 * Refunds claim `refund_status` atomically and set `payout_status=none` in the same update, so a refunded request can never be paid out.
 * Submissions require `expires_at > now()` inside the same update; after the deadline the upload is deleted and nothing is paid.
 * Coach decline is a POST button behind a confirmation page — email link scanners cannot decline requests.

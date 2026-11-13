@@ -66,6 +66,7 @@ export function input(over: Partial<RequestInput> = {}): RequestInput {
 export async function paidRequest(deps: Deps & { payments: FakePayments }, over: Partial<RequestInput> = {}) {
   const { requestId } = await createRequestAndCheckout(deps, input(over), { ip: "1.2.3.4" });
   const req = (await deps.store.getRequest(requestId))!;
+  deps.payments.authorize(`pi_demo_${req.id}`); // customer completed checkout: card hold placed
   await handleCheckoutPaid(deps, {
     id: req.stripe_checkout_session_id!,
     payment_status: "paid",

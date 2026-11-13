@@ -24,8 +24,8 @@ export default async function DemoInbox() {
         <h1 className="text-2xl font-bold">Demo inbox ({demo.mailer.sent.length})</h1>
         <div className="flex flex-wrap gap-2">
           <form action={advance}><input type="hidden" name="hours" value="0" /><button className="btn-ghost btn-sm">Run cron now</button></form>
-          <form action={advance}><input type="hidden" name="hours" value="80" /><button className="btn-ghost btn-sm">+80h & cron (reminder)</button></form>
-          <form action={advance}><input type="hidden" name="hours" value="170" /><button className="btn-ghost btn-sm">+7 days & cron (expire/refund)</button></form>
+          <form action={advance}><input type="hidden" name="hours" value="60" /><button className="btn-ghost btn-sm">+60h & cron (reminder)</button></form>
+          <form action={advance}><input type="hidden" name="hours" value="146" /><button className="btn-ghost btn-sm">+6 days & cron (expire/release hold)</button></form>
           <Link href="/" className="btn-primary btn-sm">Site</Link>
         </div>
       </div>

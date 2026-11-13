@@ -86,7 +86,7 @@ export function coachInvite(a: {
         row("You receive", `<span style="color:#0A7A3E;">${pay}</span>`),
         row("Respond by", esc(deadline)),
       ]) +
-      p(`<span style="font-size:13px;color:${MUTED};">${esc(NO_PROMISE)} Payment is sent to your bank via Stripe after you submit and finish a short one-time payout setup. If you decline or don't respond by the deadline, the family is refunded in full automatically.</span>`),
+      p(`<span style="font-size:13px;color:${MUTED};">${esc(NO_PROMISE)} Payment is sent to your bank via Stripe after you submit and finish a short one-time payout setup. If you decline or don't respond by the deadline, the family is simply never charged.</span>`),
     cta: { label: "Review & Record", url: a.reviewUrl },
     secondary: { label: "Decline this request", url: a.declineUrl },
     footerHtml: `You received this because a family requested an evaluation from you on The Athlete Market. Participation is entirely optional. <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
@@ -116,23 +116,23 @@ export function purchaserReceipt(a: { req: EvalRequest; coach: Coach; postalAddr
   const { req, coach } = a;
   const subject = `Request sent to ${coach.full_name} (${req.ref})`;
   const html = layout({
-    preheader: `We've emailed ${coach.full_name}. You'll get the video by ${dateOnly(req.expires_at)} or a full refund.`,
+    preheader: `We've emailed ${coach.full_name}. You're only charged when your video is delivered.`,
     heading: "Your request is on its way",
     bodyHtml:
       p(`We've emailed <strong>${esc(coach.full_name)}</strong> your request for a 30–60 second video evaluation of ${esc(req.athlete_name)}.`) +
       table([
         row("Reference", esc(req.ref)),
-        row("Paid", money(req.price_cents)),
+        row("Card hold", `${money(req.price_cents)} <span style="font-weight:400;color:${MUTED};">(charged only on delivery)</span>`),
         row("Video by", esc(dateOnly(req.expires_at))),
       ]) +
-      p(`<strong>What happens next:</strong> when the coach records, we'll email you a private link to watch it. If they decline or don't respond by the deadline, you'll automatically get a <strong>full refund</strong> — nothing to do.`) +
+      p(`<strong>What happens next:</strong> when the coach records, we'll email you a private link to watch it. Your card is <strong>only charged when the video is delivered</strong>. If they decline or don't respond by the deadline, the hold is released and you're never charged — nothing to do.`) +
       p(`<span style="font-size:13px;color:${MUTED};">An evaluation is one coach's feedback. It is not a recruiting contact, offer, scholarship, admission decision, or roster spot.</span>`),
     footerHtml: `Questions? Just reply to this email and include ${esc(req.ref)}.`,
     postalAddress: a.postalAddress,
   });
-  const text = `Your request ${req.ref} was sent to ${coach.full_name}. Paid ${money(req.price_cents)}. Video by ${dateOnly(
+  const text = `Your request ${req.ref} was sent to ${coach.full_name}. ${money(req.price_cents)} is held on your card and charged only when your video is delivered. Video by ${dateOnly(
     req.expires_at,
-  )} or a full automatic refund.\n\nAn evaluation is feedback only — not a recruiting contact, offer, or scholarship.\n${a.postalAddress}`;
+  )}, or the hold is released and you're never charged.\n\nAn evaluation is feedback only — not a recruiting contact, offer, or scholarship.\n${a.postalAddress}`;
   return { subject, html, text };
 }
 
@@ -153,6 +153,8 @@ export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl
 
 export function purchaserRefunded(a: {
   req: EvalRequest; coach: Coach; why: RefundWhy; postalAddress: string;
+  /** false = only a card hold existed, which we released (the normal case) */
+  captured?: boolean;
 }): Rendered {
   const { req, coach } = a;
   const reason =
@@ -163,6 +165,22 @@ export function purchaserRefunded(a: {
         : a.why === "unavailable"
           ? `${esc(coach.full_name)} is no longer accepting requests.`
           : `Your request was cancelled.`;
+  if (!a.captured) {
+    const html = layout({
+      preheader: `You were not charged. We've released the ${money(req.price_cents)} hold on your card.`,
+      heading: "You weren't charged",
+      bodyHtml:
+        p(`${reason} We've <strong>released the ${money(req.price_cents)} hold</strong> on your card — you were never charged. The pending amount usually disappears from your statement within a few days, depending on your bank.`) +
+        p(`You're welcome to request a different coach any time.`),
+      footerHtml: `Reference ${esc(req.ref)}.`,
+      postalAddress: a.postalAddress,
+    });
+    return {
+      subject: `You weren't charged — ${req.ref}`,
+      html,
+      text: `${reason.replace(/<[^>]+>/g, "")} We released the ${money(req.price_cents)} hold on your card; you were not charged (${req.ref}).\n${a.postalAddress}`,
+    };
+  }
   const subject = `Full refund issued — ${req.ref}`;
   const html = layout({
     preheader: `We've refunded ${money(req.price_cents)} to your original payment method.`,

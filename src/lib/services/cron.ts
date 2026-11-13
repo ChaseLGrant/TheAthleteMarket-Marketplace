@@ -5,7 +5,7 @@ import { coachInvite } from "../email/templates";
 import { log } from "../log";
 import { coachDeclineUrl, coachReviewUrl, unsubscribeUrl } from "./links";
 import { sendEmail } from "./notify";
-import { attemptPayout, notifyCoach, refundRequest } from "./lifecycle";
+import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest } from "./lifecycle";
 
 const HOUR = 3_600_000;
 
@@ -16,6 +16,7 @@ const HOUR = 3_600_000;
 export async function runCron(deps: Deps) {
   const now = deps.now();
   const nowIso = now.toISOString();
+  const settings = await deps.store.getSettings();
   const out = { notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, cancelled: 0, purged: 0, errors: 0 };
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try { await fn(); } catch (e) { out.errors++; log("error", `cron:${label}`, { error: String(e) }); }
@@ -25,7 +26,7 @@ export async function runCron(deps: Deps) {
   for (const r of await deps.store.listRequests({ status: ["paid"] }))
     await safe("notify", async () => { await notifyCoach(deps, r.id); out.notified++; });
 
-  // 2. Deadline passed without a video → expire + full refund. Late uploads can no longer be submitted.
+  // 2. Deadline passed without a video → expire + release the card hold (no charge, no fee). Late uploads can no longer be submitted.
   for (const r of await deps.store.listRequests({ status: ["paid", "coach_notified", "accepted"], expiresBefore: nowIso })) {
     await safe("expire", async () => {
       const e = await deps.store.casRequest(r.id, { status: ["paid", "coach_notified", "accepted"], expiresBefore: nowIso }, { status: "expired", expired_at: nowIso });
@@ -67,11 +68,19 @@ export async function runCron(deps: Deps) {
     await safe("payout", async () => { await attemptPayout(deps, r.id); out.payoutsRetried++; });
   }
 
-  // 5. Reminders at ~3 days and ~1 day left.
+  // 4b. Video submitted but the capture failed earlier → retry; deliver if it now succeeds.
+  for (const r of await deps.store.listRequests({ status: ["submitted"] })) {
+    if (r.payment_captured_at) continue;
+    await safe("capture", async () => {
+      if (await capturePayment(deps, r.id) && !settings.require_admin_review) await completeRequest(deps, r.id, "cron");
+    });
+  }
+
+  // 5. Reminders. Windows are wide enough for a once-a-day cron (Vercel Hobby).
   for (const r of await deps.store.listRequests({ status: ["coach_notified", "accepted"] })) {
     if (!r.expires_at) continue;
     const hoursLeft = (Date.parse(r.expires_at) - now.getTime()) / HOUR;
-    const due = (r.reminder_count === 0 && hoursLeft <= 96 && hoursLeft > 30) || (r.reminder_count <= 1 && hoursLeft <= 24 && hoursLeft > 1);
+    const due = (r.reminder_count === 0 && hoursLeft <= 72 && hoursLeft > 36) || (r.reminder_count <= 1 && hoursLeft <= 36 && hoursLeft > 1);
     if (!due) continue;
     await safe("reminder", async () => {
       const coach = await deps.store.getCoach(r.coach_id);
@@ -105,7 +114,6 @@ export async function runCron(deps: Deps) {
   }
 
   // 7. Data retention: delete videos + minors' details after the retention window.
-  const settings = await deps.store.getSettings();
   const cutoff = new Date(now.getTime() - settings.retention_days * 24 * HOUR).toISOString();
   const old = [
     ...(await deps.store.listRequests({ status: ["completed"], completedBefore: cutoff })),

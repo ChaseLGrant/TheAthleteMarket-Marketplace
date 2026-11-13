@@ -112,7 +112,7 @@ export async function createRequestAndCheckout(
     amountCents: pb.price_cents,
     currency: "usd",
     productName: `Video evaluation from ${coach.full_name}`,
-    description: `30–60 second personal video feedback on ${input.athleteName}'s film. Delivered within ${settings.deadline_days} days or fully refunded.`,
+    description: `30–60 second personal video feedback on ${input.athleteName}'s film. Charged only when delivered (within ${settings.deadline_days} days); otherwise the card hold is released.`,
     customerEmail: input.purchaserEmail,
     successUrl: `${site}/request/success?ref=${req!.ref}`,
     cancelUrl: `${site}/coaches/${coach.slug}/request?cancelled=1`,
@@ -128,28 +128,31 @@ export async function handleCheckoutPaid(
   deps: Deps,
   s: { id: string; payment_status: string; payment_intent: string | null; client_reference_id: string | null; amount_total: number | null; metadata?: Record<string, string> | null },
 ) {
-  if (s.payment_status !== "paid") return; // async methods: wait for async_payment_succeeded
+  // With capture_method=manual, Checkout completes with a card HOLD (PaymentIntent "requires_capture");
+  // Stripe may report payment_status "unpaid" for it, so we always confirm with the PaymentIntent itself.
+  if (s.payment_status === "no_payment_required") return;
   const requestId = s.client_reference_id ?? s.metadata?.request_id;
   if (!requestId) throw new Error(`Checkout ${s.id} has no request id`);
   const req = await mustRequest(deps, requestId);
   if (!s.payment_intent) throw new Error(`Checkout ${s.id} has no payment_intent`);
 
   if (req.status === "awaiting_payment" || req.status === "cancelled") {
-    let details: { chargeId: string | null; feeCents: number | null } = { chargeId: null, feeCents: null };
-    try {
-      details = await deps.payments.getPaymentDetails(s.payment_intent);
-    } catch (e) {
-      log("warn", "could not fetch payment details", { request_id: req.id, error: errMsg(e) });
-    }
+    const details = await deps.payments.getPaymentDetails(s.payment_intent); // throws → Stripe retries the webhook
+    if (details.status !== "requires_capture" && details.status !== "succeeded") return; // not authorized (yet)
     const settings = await deps.store.getSettings();
     const now = deps.now();
+    // Coach deadline must end safely before the card hold lapses, so delivery can always be captured.
+    let deadline = now.getTime() + settings.deadline_days * 86_400_000;
+    if (details.captureBefore) deadline = Math.min(deadline, details.captureBefore.getTime() - 12 * 3_600_000);
     const paid = await deps.store.casRequest(
       req.id,
       { status: ["awaiting_payment", "cancelled"] },
       {
         status: "paid",
         paid_at: iso(now),
-        expires_at: iso(new Date(now.getTime() + settings.deadline_days * 86_400_000)),
+        expires_at: iso(new Date(deadline)),
+        authorization_expires_at: details.captureBefore ? iso(details.captureBefore) : null,
+        payment_captured_at: details.status === "succeeded" ? iso(now) : null,
         stripe_checkout_session_id: s.id,
         stripe_payment_intent_id: s.payment_intent,
         stripe_charge_id: details.chargeId,
@@ -271,7 +274,7 @@ function assertCoachCanAct(req: EvalRequest, now: Date) {
   if (!["paid", "coach_notified", "accepted"].includes(req.status))
     throw new UserFacingError("This request is no longer open.", "closed");
   if (!req.expires_at || new Date(req.expires_at) <= now)
-    throw new UserFacingError("The deadline for this request has passed, so the family has been refunded.", "expired");
+    throw new UserFacingError("The deadline for this request has passed, so the family was not charged.", "expired");
 }
 
 export async function submitVideo(
@@ -314,12 +317,14 @@ export async function submitVideo(
     if ((cur.status === "submitted" || cur.status === "completed") && cur.video_path === a.path) return cur;
     throw new UserFacingError(
       cur.status === "expired" || cur.status === "refunded"
-        ? "The deadline for this request passed before your video arrived, so the family was refunded. You have not been charged anything."
+        ? "The deadline for this request passed before your video arrived, so the family was not charged."
         : "This request is no longer open.",
       "closed",
     );
   }
   await event(deps, r, "video_submitted", "coach", req.status, "submitted", { size: stat.size, duration: a.durationSeconds ?? null });
+  // Charge the held card now, while the hold is guaranteed valid (deadline < hold expiry).
+  if (!(await capturePayment(deps, r.id))) return mustRequest(deps, r.id);
   const settings = await deps.store.getSettings();
   if (settings.require_admin_review) {
     await alertAdmin(deps, "Video awaiting review", [`${r.ref} — review before delivery.`], adminRequestUrl(r.id));
@@ -343,7 +348,31 @@ export async function declineRequest(deps: Deps, req: EvalRequest, reason: strin
 // ---------------------------------------------------------------------------
 // 5. Fulfillment: verified → delivered → payout
 // ---------------------------------------------------------------------------
+/**
+ * Capture the card hold (the family is charged only here, on delivery). Idempotent.
+ * Returns false if capture failed; the request stays `submitted`, admin is alerted, and cron retries.
+ */
+export async function capturePayment(deps: Deps, requestId: string): Promise<boolean> {
+  const req = await mustRequest(deps, requestId);
+  if (req.payment_captured_at) return true;
+  if (!req.stripe_payment_intent_id) return false;
+  try {
+    const c = await deps.payments.capture({ paymentIntentId: req.stripe_payment_intent_id, requestId: req.id });
+    const r = await deps.store.casRequest(req.id, {}, {
+      payment_captured_at: iso(deps.now()), stripe_charge_id: c.chargeId ?? req.stripe_charge_id, stripe_fee_cents: c.feeCents, last_error: null,
+    });
+    if (r) await event(deps, r, "payment_captured", "system", null, null, { fee: c.feeCents });
+    return true;
+  } catch (e) {
+    await deps.store.casRequest(req.id, {}, { last_error: `capture: ${errMsg(e)}` });
+    await event(deps, req, "capture_failed", "system", null, null, { error: errMsg(e) });
+    await alertAdmin(deps, "Payment capture failed", [`${req.ref}: ${errMsg(e)}`, "Video is held (not delivered, coach not paid). Will retry; check the payment in Stripe."], adminRequestUrl(req.id));
+    return false;
+  }
+}
+
 export async function completeRequest(deps: Deps, requestId: string, actor: string): Promise<EvalRequest> {
+  if (!(await capturePayment(deps, requestId))) return mustRequest(deps, requestId);
   const now = iso(deps.now());
   const r = await deps.store.casRequest(
     requestId,
@@ -377,6 +406,7 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
 export async function attemptPayout(deps: Deps, requestId: string): Promise<EvalRequest> {
   const req = await mustRequest(deps, requestId);
   if (req.status !== "completed" || !["pending", "blocked", "failed"].includes(req.payout_status)) return req;
+  if (!req.payment_captured_at) return req; // never pay a coach for money we haven't collected
 
   if (req.stripe_dispute_id && req.dispute_status !== "won") {
     await deps.store.casRequest(req.id, { payout_status: ["pending", "failed"] }, { payout_status: "blocked", payout_block_reason: "Payment is under dispute" });
@@ -495,6 +525,7 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
     await alertAdmin(deps, "Refund blocked: coach already paid", [`${req.ref}: reverse the transfer first, then refund.`], adminRequestUrl(req.id));
     throw new UserFacingError("Coach has already been paid — reverse the transfer before refunding.", "payout_exists");
   }
+  const captured = !!req.payment_captured_at;
   // Claim the refund AND neutralize any pending payout in one atomic update.
   const claimed = await deps.store.casRequest(
     req.id,
@@ -503,14 +534,21 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
   );
   if (!claimed) return mustRequest(deps, req.id);
   try {
-    const refund = await deps.payments.refund({ paymentIntentId: req.stripe_payment_intent_id, requestId: req.id, reason: why });
+    // Not yet charged → just release the card hold: no charge, no Stripe fee.
+    // Already charged (rare, admin-initiated) → a real refund; Stripe keeps its processing fee.
+    let refund: { id: string | null };
+    if (captured) refund = await deps.payments.refund({ paymentIntentId: req.stripe_payment_intent_id, requestId: req.id, reason: why });
+    else {
+      await deps.payments.releaseHold({ paymentIntentId: req.stripe_payment_intent_id, requestId: req.id });
+      refund = { id: null };
+    }
     const done = await deps.store.casRequest(
       req.id,
       { refund_status: ["processing"], status: sourcesFor("refunded") },
       { status: "refunded", refund_status: "succeeded", refunded_at: iso(deps.now()), stripe_refund_id: refund.id, last_error: null },
     );
     if (done) {
-      await event(deps, done, "refunded", actor, req.status, "refunded", { why, refund: refund.id });
+      await event(deps, done, captured ? "refunded" : "hold_released", actor, req.status, "refunded", { why, refund: refund.id });
       // Revoke any delivery link. The coach link stays valid so it can show a friendly "closed" page;
       // every coach action re-checks status, so it can no longer submit or trigger payment.
       await deps.store.casRequest(req.id, {}, { delivery_link_nonce: randomUUID().replace(/-/g, "") });
@@ -518,7 +556,7 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
         const coach = (await deps.store.getCoach(done.coach_id))!;
         await sendEmail(deps, {
           to: done.purchaser_email,
-          rendered: purchaserRefunded({ req: done, coach, why, postalAddress: env.postalAddress() }),
+          rendered: purchaserRefunded({ req: done, coach, why, captured, postalAddress: env.postalAddress() }),
           template: "purchaser_refunded",
           idempotencyKey: `refund-email-${done.id}`,
           requestId: done.id,

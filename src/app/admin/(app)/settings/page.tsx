@@ -20,8 +20,8 @@ export default async function Settings() {
           <div><label className="label" htmlFor="commission_pct">Platform commission %</label>
             <input id="commission_pct" name="commission_pct" type="number" min={0} max={50} step={0.5} className="field" defaultValue={s.commission_bps / 100} />
             <p className="hint">Pilot: 0% (coach keeps 100%). Later: 20%.</p></div>
-          <div><label className="label" htmlFor="deadline_days">Coach deadline (days)</label>
-            <input id="deadline_days" name="deadline_days" type="number" min={1} max={30} className="field" defaultValue={s.deadline_days} /></div>
+          <div><label className="label" htmlFor="deadline_days">Coach deadline (days, max 6)</label>
+            <input id="deadline_days" name="deadline_days" type="number" min={1} max={6} className="field" defaultValue={s.deadline_days} /></div>
           <div><label className="label" htmlFor="max_open">Max open requests per coach</label>
             <input id="max_open" name="max_open" type="number" min={1} max={200} className="field" defaultValue={s.max_open_requests_per_coach} /></div>
           <div><label className="label" htmlFor="retention_days">Video & minor data retention (days)</label>
@@ -38,7 +38,7 @@ export default async function Settings() {
             <tbody>{s.price_tiers_cents.map((p) => { const b = priceBreakdown(p, s); return (
               <tr key={p}><td>{money(p)}</td><td>{money(b.coach_payout_cents)}</td><td>{money(b.platform_fee_cents)}</td><td>{money(b.estimated_stripe_fee_cents)}</td>
                 <td className={b.estimated_platform_net_cents < 0 ? "text-danger" : "text-success"}>{money(b.estimated_platform_net_cents)}</td></tr>); })}</tbody></table>
-          <p className="mt-2 text-xs text-muted">Stripe does not return its processing fee on refunds, so each refunded request also costs the platform its fee.</p>
+          <p className="mt-2 text-xs text-muted">Cards are only held at checkout and charged on delivery, so declined/expired requests cost $0 in Stripe fees. Only admin refunds of already-charged payments lose the fee.</p>
         </div>
       </AdminForm>
 

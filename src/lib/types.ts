@@ -89,6 +89,8 @@ export interface EvalRequest {
   platform_fee_cents: number;
   coach_payout_cents: number;
   stripe_fee_cents: number | null;
+  payment_captured_at: string | null;
+  authorization_expires_at: string | null;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_charge_id: string | null;
