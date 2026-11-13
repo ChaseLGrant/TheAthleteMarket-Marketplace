@@ -26,11 +26,11 @@ export function ApplyForm() {
     <form action={action} className="space-y-4">
       {s.error && <p role="alert" className="rounded-xl bg-danger-50 px-4 py-3 text-sm font-medium text-[#7a1717]">{s.error}</p>}
       <input name="company" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <F n="fullName" l="Full name" req />
         <F n="email" l="Email" t="email" req />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="sport" className="label">Sport</label>
           <select id="sport" name="sport" className="field" defaultValue={v.sport ?? ""}>
@@ -48,7 +48,7 @@ export function ApplyForm() {
           </select>
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <F n="title" l="Most relevant title" />
         <F n="school" l="School(s)" />
         <div>

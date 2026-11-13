@@ -45,7 +45,7 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
       <AdminForm action={saveCoach} className="card p-5">
         <input type="hidden" name="id" value={isNew ? "" : id} />
         <h2 className="font-semibold">Profile</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <T n="full_name" l="Full name" v={c.full_name} />
           <T n="title" l="Title" v={c.title} />
           <T n="school" l="School" v={c.school} />
@@ -57,7 +57,7 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
           <T n="photo_url" l="Photo URL (https)" v={c.photo_url} />
         </div>
         <T n="credentials" l="Credentials line" v={c.credentials} />
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <T n="phone" l="Mobile (for text alerts)" v={c.phone ? prettyPhone(c.phone) : ""} t="tel" />
           <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="sms_consent" defaultChecked={!!c.sms_opt_in_at} className="h-5 w-5 accent-blue" />
             Coach consented to texts{c.sms_opt_in_at ? ` (${c.sms_opt_in_at.slice(0, 10)})` : ""}{c.sms_opted_out ? " — replied STOP" : ""}</label>
@@ -67,7 +67,7 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
         {c.application_message && <Notice title="Application note">{c.application_message}</Notice>}
 
         <h2 className="pt-2 font-semibold">Compliance gate</h2>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <S n="listing_type" l="Listing" v={c.listing_type} opts={["directory", "participating"]} />
           <S n="coach_kind" l="Coach status" v={c.coach_kind} opts={["former_college", "independent", "active_college"]} />
           <S n="verification_status" l="Identity verification" v={c.verification_status} opts={["unverified", "pending", "verified", "rejected"]} />
@@ -77,7 +77,7 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
           <textarea id="eligibility_basis" name="eligibility_basis" rows={2} defaultValue={c.eligibility_basis ?? ""} className="field" placeholder="e.g. Former D2 head coach, left Example U 2024, confirmed no current college employment via LinkedIn + call on 2026-11-01" /></div>
         <div><label className="label" htmlFor="authorization_reference">Institution + governing-body authorization (required for active college coaches)</label>
           <textarea id="authorization_reference" name="authorization_reference" rows={2} defaultValue={c.authorization_reference ?? ""} className="field" placeholder="Compliance office letter ref, date, signatory; governing-body interpretation ref" /></div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <T n="eligibility_expires_at" l="Eligibility re-review date" v={c.eligibility_expires_at?.slice(0, 10)} t="date" />
           <S n="price_cents" l="Price" v={c.price_cents ? String(c.price_cents) : ""} opts={["", ...settings.price_tiers_cents.map(String)]} />
           <div className="text-sm text-muted"><p className="label">Coach receives</p>{c.price_cents ? money(c.price_cents - Math.round((c.price_cents * settings.commission_bps) / 10000)) : "—"}</div>
@@ -85,7 +85,7 @@ export default async function CoachEditor({ params }: { params: Promise<{ id: st
       </AdminForm>
 
       {coach && (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <section className="card space-y-3 p-5">
             <h2 className="font-semibold">Stripe Connect payouts</h2>
             <p className="text-sm">Account: {coach.stripe_account_id ?? "not created"} · Transfers {coach.stripe_transfers_active ? "active" : "inactive"} · Details {coach.stripe_details_submitted ? "submitted" : "missing"} · Payouts {coach.stripe_payouts_enabled ? "enabled" : "disabled"}</p>

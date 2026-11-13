@@ -89,7 +89,7 @@ export default async function Home() {
           <Link href="/coaches?available=1" className="text-sm font-semibold text-blue hover:underline">See all →</Link>
         </div>
         {featured.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {featured.map(({ coach, available }) => <CoachCard key={coach.id} coach={coach} available={available} />)}
           </div>
         ) : (
@@ -102,7 +102,7 @@ export default async function Home() {
         <div className="container-page py-16">
           <p className="eyebrow">How it works</p>
           <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Three steps. About two minutes.</h2>
-          <ol className="mt-8 grid gap-4 md:grid-cols-3">
+          <ol className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
             {STEPS.map((s) => (
               <li key={s.n} className="card p-6">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue text-sm font-bold text-white">{s.n}</span>

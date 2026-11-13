@@ -350,7 +350,7 @@ export function Recorder(props: RecorderProps) {
               <p className="text-center text-xs text-muted">Keep this page open.</p>
             </div>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr]">
               <button className="btn-ghost" onClick={retake}>↺ Retake</button>
               <button className="btn-primary text-[17px]" onClick={upload} disabled={!attest || (duration != null && (duration < MIN || duration > 180))}>
                 {submitLabel}

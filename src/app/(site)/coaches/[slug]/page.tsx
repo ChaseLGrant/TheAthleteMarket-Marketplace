@@ -43,7 +43,7 @@ export default async function CoachPage({ params, searchParams }: P) {
   return (
     <div className="container-page max-w-4xl py-8 sm:py-12">
       <Link href="/coaches" className="text-sm font-medium text-muted hover:text-navy">← All coaches</Link>
-      <div className="mt-4 grid gap-6 md:grid-cols-[1fr_320px]">
+      <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-[1fr_320px]">
         <section className="card p-6 sm:p-8">
           <div className="flex items-center gap-4">
             <Avatar coach={coach} size={80} />

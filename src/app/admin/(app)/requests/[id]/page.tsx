@@ -43,7 +43,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
         {r.video_path && <ActionForm action={requestAction} fields={{ ...f, op: "delete_video" }} label="Delete video" tone="danger" confirm="Permanently delete the video file?" />}
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section className="card p-5">
           <h2 className="font-semibold">Athlete & purchaser</h2>
           <dl className="mt-3 grid grid-cols-[140px_1fr] gap-y-1.5 text-sm">
@@ -87,7 +87,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section className="card overflow-x-auto">
           <h2 className="p-4 font-semibold">Timeline</h2>
           <table className="table-admin">

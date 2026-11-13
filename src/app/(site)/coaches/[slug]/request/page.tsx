@@ -51,8 +51,8 @@ export default async function RequestPage({ params, searchParams }: P) {
       {original && <div className="mt-4"><Notice tone="success" title="Second opinion">{original.athlete_name}&apos;s details are already filled in — just check and continue.</Notice></div>}
       {sp.cancelled && <div className="mt-4"><Notice tone="warn">Checkout was cancelled — you haven&apos;t been charged. Your details are below whenever you&apos;re ready.</Notice></div>}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
-        <div className="card p-5 sm:p-8">
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+        <div className="card min-w-0 p-5 sm:p-8">
           <RequestForm
             coachSlug={coach.slug}
             coachFirstName={coach.full_name.split(" ")[0]!}

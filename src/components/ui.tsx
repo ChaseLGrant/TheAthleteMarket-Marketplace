@@ -84,7 +84,7 @@ export function CoachCard({ coach, available, query = "" }: { coach: Coach; avai
   return (
     <Link
       href={`/coaches/${coach.slug}${query}`}
-      className="card group flex flex-col gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] focus-visible:outline-2 focus-visible:outline-blue"
+      className="card group flex min-w-0 flex-col gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] focus-visible:outline-2 focus-visible:outline-blue"
     >
       <div className="flex items-start gap-3.5">
         <Avatar coach={coach} size={52} />

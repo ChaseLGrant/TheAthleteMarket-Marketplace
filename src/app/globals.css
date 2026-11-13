@@ -25,6 +25,8 @@
 }
 
 :root { color-scheme: light; }
+/* Fieldsets default to min-width:min-content, which lets long content push past a phone's width. */
+fieldset { min-width: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   background: #ffffff;

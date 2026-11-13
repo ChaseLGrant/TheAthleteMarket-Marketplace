@@ -11,12 +11,12 @@ export default async function Settings() {
   const deps = await getDeps();
   const [s, spend] = await Promise.all([deps.store.getSettings(), deps.store.listMarketingSpend()]);
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
       <AdminForm action={saveSettings} className="card p-5">
         <h1 className="text-xl font-bold">Pricing & operations</h1>
         <div><label className="label" htmlFor="tiers">Price tiers (USD, comma separated)</label>
           <input id="tiers" name="tiers" className="field" defaultValue={s.price_tiers_cents.map((c) => c / 100).join(", ")} /></div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><label className="label" htmlFor="commission_pct">Platform commission %</label>
             <input id="commission_pct" name="commission_pct" type="number" min={0} max={50} step={0.5} className="field" defaultValue={s.commission_bps / 100} />
             <p className="hint">Pilot: 0% (coach keeps 100%). Later: 20%.</p></div>

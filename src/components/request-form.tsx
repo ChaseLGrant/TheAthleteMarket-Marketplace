@@ -50,7 +50,7 @@ export function RequestForm(p: Props) {
       <fieldset className="space-y-4">
         <legend className="text-lg font-semibold">The athlete</legend>
         <Field label="Athlete's full name" name="athleteName" error={err.athleteName} defaultValue={v.athleteName} autoComplete="off" required />
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Sport" name="sport" error={err.sport} defaultValue={v.sport ?? p.sport} required />
           <Field label="Position" name="position" error={err.position} defaultValue={v.position} placeholder="e.g. PG, WR, CB" required />
           <div>
@@ -95,7 +95,7 @@ export function RequestForm(p: Props) {
             ))}
           </div>
         )}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={effectiveRel === "athlete_adult" ? "Your name" : "Parent/guardian name"} name="purchaserName" error={err.purchaserName} defaultValue={v.purchaserName} autoComplete="name" required />
           <Field label="Email" name="purchaserEmail" type="email" inputMode="email" autoComplete="email" hint="We'll send the private video link here." error={err.purchaserEmail} defaultValue={v.purchaserEmail} required />
         </div>
@@ -112,7 +112,7 @@ export function RequestForm(p: Props) {
         ) : (
           <fieldset className="space-y-4">
             <legend className="text-lg font-semibold">Optional details</legend>
-            <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_140px]">
               <Field label="Key metrics" name="metrics" placeholder="e.g. 6'2&quot;, 185 lb, 4.6 40-yd" defaultValue={v.metrics} error={err.metrics} />
               <Field label="GPA" name="gpa" placeholder="3.7" defaultValue={v.gpa} error={err.gpa} />
             </div>
