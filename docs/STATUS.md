@@ -13,7 +13,7 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 * **Production build** succeeds (Next.js 16, TypeScript strict).
 * **End-to-end browser run** in demo mode (Chromium, iPhone 13 emulation, fake camera): search, directory-listing block,
   form validation, checkout, coach email link, in-browser recording, upload with progress, family playback, Stripe onboarding
-  (simulated), decline refund, 7-day expiry refund, admin login and every admin page. No browser console errors.
+  (simulated), decline → hold released, expiry → hold released, admin login and every admin page. No browser console errors.
 
 ## NOT yet verified (needs your credentials and real devices)
 
