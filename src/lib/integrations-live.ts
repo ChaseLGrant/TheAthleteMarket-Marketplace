@@ -202,6 +202,20 @@ export class StripePayments implements Payments {
 
 export class ResendMailer implements Mailer {
   async send(m: EmailMessage) {
+    // High volume: Resend rate-limits bursts (HTTP 429). Retry with backoff; the Idempotency-Key makes it safe.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.sendOnce(m);
+      } catch (e) {
+        const status = (e as { status?: number }).status ?? 0;
+        if (!(status === 429 || status >= 500) || attempt >= 5) throw e;
+        const wait = (e as { retryAfter?: number }).retryAfter ?? Math.min(8000, 400 * 2 ** attempt);
+        await new Promise((r) => setTimeout(r, wait + Math.random() * 250));
+      }
+    }
+  }
+
+  private async sendOnce(m: EmailMessage) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -220,7 +234,13 @@ export class ResendMailer implements Mailer {
       }),
     });
     const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
-    if (!res.ok || !body.id) throw new Error(`Resend ${res.status}: ${body.message ?? "unknown error"}`);
+    if (!res.ok || !body.id) {
+      const err = new Error(`Resend ${res.status}: ${body.message ?? "unknown error"}`) as Error & { status: number; retryAfter?: number };
+      err.status = res.status;
+      const ra = Number(res.headers.get("retry-after"));
+      if (ra > 0) err.retryAfter = ra * 1000;
+      throw err;
+    }
     return { id: body.id };
   }
 }

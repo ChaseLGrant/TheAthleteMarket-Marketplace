@@ -49,6 +49,6 @@ export async function resolveAgainLink(deps: Deps, token: string): Promise<EvalR
   const id = tokenId(token);
   if (!id) return null;
   const req = await deps.store.getRequest(id);
-  if (!req || !verifyToken("again", token, req.delivery_link_nonce) || req.status !== "completed" || req.purged_at) return null;
+  if (!req || !verifyToken("again", token, req.delivery_link_nonce) || !["completed", "refunded"].includes(req.status) || req.purged_at) return null;
   return req;
 }

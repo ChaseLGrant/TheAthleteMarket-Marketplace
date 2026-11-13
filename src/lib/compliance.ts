@@ -16,6 +16,7 @@ export function paidRequestGate(coach: Coach, settings: Settings, _now = new Dat
   if (coach.removed) reasons.push("This listing has been removed.");
   if (!coach.email) reasons.push("We don't have an email address for this coach yet.");
   if (coach.opted_out) reasons.push("This coach has asked not to receive requests.");
+  if (coach.email_status && coach.email_status !== "ok") reasons.push("We couldn't reach this coach by email.");
   if (coach.paused) reasons.push("Coach has paused new requests.");
   if (coach.source === "self" && !coach.email_confirmed_at) reasons.push("Coach hasn't confirmed their email yet.");
   if (coach.coach_kind === "active_college" && !settings.allow_active_college_coaches)

@@ -102,12 +102,42 @@ export function coachWeekly(a: { coach: Coach; count: number; earnedCents: numbe
   return { subject: `You earned ${money(a.earnedCents)} this week`, html, text: `You earned ${money(a.earnedCents)} this week (${a.count} evaluations). Hub: ${a.hubUrl}` };
 }
 
+/** One email per coach when several families are waiting (high volume: never one email per request). */
+export function coachDigest(a: {
+  coach: Coach; items: { req: EvalRequest; url: string }[]; hubUrl: string; unsubscribeUrl: string; postalAddress: string; finalDay: boolean;
+}): Rendered {
+  const total = a.items.reduce((s, i) => s + i.req.coach_payout_cents, 0);
+  const n = a.items.length;
+  const soonest = a.items.map((i) => i.req.expires_at!).sort()[0]!;
+  const subject = a.finalDay
+    ? `Last day: ${money(total)} waiting from ${n} famil${n === 1 ? "y" : "ies"}`
+    : `${n} famil${n === 1 ? "y is" : "ies are"} waiting on you — ${money(total)}`;
+  const rows = a.items.map((i) =>
+    `<tr><td style="padding:10px 0;border-bottom:1px solid #EEF1F7;font-size:14px;color:${NAVY};"><strong>${esc(i.req.athlete_name)}</strong><br><span style="color:${MUTED};">${esc(i.req.sport)} · ${esc(i.req.position)} · ${esc(i.req.grad_year)} · by ${esc(dateOnly(i.req.expires_at))}</span></td>` +
+    `<td style="padding:10px 0;border-bottom:1px solid #EEF1F7;text-align:right;white-space:nowrap;"><span style="font-weight:700;color:#0A7A3E;">${money(i.req.coach_payout_cents)}</span><br><a href="${esc(i.url)}" style="color:${BLUE};font-size:14px;font-weight:600;">Record →</a></td></tr>`).join("");
+  const html = layout({
+    preheader: `${money(total)} in evaluation requests. 30–60 seconds each, right from your phone.`,
+    heading: a.finalDay ? `Last chance: ${money(total)} is waiting` : `${money(total)} in requests is waiting for you`,
+    bodyHtml:
+      p(`${n} famil${n === 1 ? "y has" : "ies have"} asked for your honest feedback. Each one is a <strong>30–60 second video</strong> recorded in your browser — no account, no app.`) +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 14px;">${rows}</table>` +
+      p(`<span style="font-size:13px;color:${MUTED};">First deadline: ${esc(dateOnly(soonest))}. Anything you don't record is simply released — families are never charged.</span>`),
+    cta: { label: "See all requests", url: a.hubUrl },
+    footerHtml: `Busy? <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause new requests</a>. <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
+    postalAddress: a.postalAddress,
+  });
+  const text = [subject, "", ...a.items.map((i) => `${i.req.athlete_name} (${i.req.position}, ${i.req.grad_year}) — ${money(i.req.coach_payout_cents)}: ${i.url}`), "", `All requests: ${a.hubUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
+  return { subject, html, text };
+}
+
 /** Text messages: short, branded, always with opt-out wording. */
 export const sms = {
   coachNewRequest: (req: EvalRequest, url: string) =>
     `The Athlete Market: ${money(req.coach_payout_cents)} evaluation request — ${req.athlete_name}, ${req.position}, ${req.grad_year}. Record by ${dateOnly(req.expires_at)}: ${url} Reply STOP to opt out.`,
   coachReminder: (req: EvalRequest, url: string, daysLeft: number) =>
     `The Athlete Market: ${daysLeft} day${daysLeft === 1 ? "" : "s"} left to record ${req.athlete_name}'s evaluation (${money(req.coach_payout_cents)}): ${url} Reply STOP to opt out.`,
+  coachDigest: (n: number, totalCents: number, url: string) =>
+    `The Athlete Market: ${n} families are waiting on your video evaluation — ${money(totalCents)} total. See them: ${url} Reply STOP to opt out.`,
   coachFilmUpdated: (req: EvalRequest, url: string) =>
     `The Athlete Market: ${req.athlete_name}'s family sent a new film link. Record here: ${url}`,
   adminNewOrder: (req: EvalRequest, coach: Coach) =>
@@ -235,6 +265,8 @@ export function purchaserRefunded(a: {
   req: EvalRequest; coach: Coach; why: RefundWhy; postalAddress: string;
   /** false = only a card hold existed, which we released (the normal case) */
   captured?: boolean;
+  /** One-tap "request another coach" with the athlete's details pre-filled. */
+  retryUrl?: string;
 }): Rendered {
   const { req, coach } = a;
   const reason =
@@ -251,7 +283,8 @@ export function purchaserRefunded(a: {
       heading: "You weren't charged",
       bodyHtml:
         p(`${reason} We've <strong>released the ${money(req.price_cents)} hold</strong> on your card — you were never charged. The pending amount usually disappears from your statement within a few days, depending on your bank.`) +
-        p(`You're welcome to request a different coach any time.`),
+        p(a.retryUrl ? `<strong>Still want feedback for ${esc(req.athlete_name.split(" ")[0])}?</strong> Pick another coach — your details are already saved, it takes 30 seconds.` : `You're welcome to request a different coach any time.`),
+      cta: a.retryUrl ? { label: "Request another coach", url: a.retryUrl } : undefined,
       footerHtml: `Reference ${esc(req.ref)}.`,
       postalAddress: a.postalAddress,
     });

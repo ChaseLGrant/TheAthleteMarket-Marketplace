@@ -80,6 +80,7 @@ export interface Coach {
   stripe_legal_name: string | null;
   name_match_override: boolean;
   requests_received: number;
+  email_status?: "ok" | "bounced" | "complained";
   created_at: string;
   updated_at: string;
 }

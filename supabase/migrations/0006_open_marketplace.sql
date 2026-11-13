@@ -21,3 +21,7 @@ update settings set require_payouts_before_booking = false, show_directory_listi
 alter table settings alter column price_tiers_cents set default '{5000}';
 alter table settings alter column commission_bps set default 2000;
 update settings set price_tiers_cents = '{5000}', commission_bps = 2000;
+
+-- High volume: track undeliverable coach addresses (from Resend bounce / complaint webhooks).
+alter table coaches add column if not exists email_status text not null default 'ok';  -- ok | bounced | complained
+create index if not exists requests_coach_open on requests (coach_id) where status in ('paid','coach_notified','accepted');

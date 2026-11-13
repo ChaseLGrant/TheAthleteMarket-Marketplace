@@ -37,6 +37,7 @@ export const env = {
   stripeWebhookSecrets: () =>
     [opt("STRIPE_WEBHOOK_SECRET"), opt("STRIPE_CONNECT_WEBHOOK_SECRET")].filter((s): s is string => !!s),
   resendApiKey: () => req("RESEND_API_KEY"),
+  resendWebhookSecret: () => opt("RESEND_WEBHOOK_SECRET"),
   emailFrom: () => opt("EMAIL_FROM") ?? "The Athlete Market <evaluations@theathletemarket.com>",
   emailReplyTo: () => opt("EMAIL_REPLY_TO"),
   adminAlertEmail: () => opt("ADMIN_ALERT_EMAIL"),

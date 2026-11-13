@@ -8,7 +8,8 @@ import { coachDeclineUrl, coachReviewUrl, hubUrl, unsubscribeUrl } from "./links
 import { sendEmail } from "./notify";
 import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest, textCoach } from "./lifecycle";
 import { sendWeeklySummaries } from "./experience";
-import { sms as smsText } from "../email/templates";
+import { coachDigest, sms as smsText } from "../email/templates";
+import type { EvalRequest } from "../types";
 
 const HOUR = 3_600_000;
 
@@ -16,11 +17,14 @@ const HOUR = 3_600_000;
  * One idempotent sweep, run every ~15–60 minutes. Each step is independently safe to repeat
  * and to run concurrently with webhooks and user actions (all writes are compare-and-set).
  */
-export async function runCron(deps: Deps) {
+export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
   const now = deps.now();
+  // Time-boxed so a run never hits the hosting timeout at high volume; the next run picks up the rest.
+  const startedAt = Date.now();
+  const outOfTime = () => Date.now() - startedAt > (opts.budgetMs ?? 50_000);
   const nowIso = now.toISOString();
   const settings = await deps.store.getSettings();
-  const out = { notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
+  const out = { partial: false, notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try { await fn(); } catch (e) { out.errors++; log("error", `cron:${label}`, { error: String(e) }); }
   };
@@ -79,11 +83,10 @@ export async function runCron(deps: Deps) {
     });
   }
 
-  // 5. Follow-ups until the coach responds (stops on submit/decline/expiry). Designed for a once-a-day cron:
-  //    stage 1 — ~1 day after the first email, only if they haven't opened it ("$40 is still waiting")
-  //    stage 2 — ~3 days left
-  //    stage 3 — final day
-  for (const r of await deps.store.listRequests({ status: ["coach_notified", "accepted"] })) {
+  // 5. Follow-ups until the coach responds — grouped per coach (one email + one text per coach per run).
+  //    stage 1: ~1 day after first contact if unopened · stage 2: ~3 days left · stage 3: final day.
+  const due = new Map<string, { r: EvalRequest; stage: number }[]>();
+  for (const r of await deps.store.listRequests({ status: ["coach_notified", "accepted"], limit: 10000 })) {
     if (!r.expires_at) continue;
     const hoursLeft = (Date.parse(r.expires_at) - now.getTime()) / HOUR;
     const hoursSinceNotify = r.coach_notified_at ? (now.getTime() - Date.parse(r.coach_notified_at)) / HOUR : 0;
@@ -93,30 +96,52 @@ export async function runCron(deps: Deps) {
       () => hoursLeft <= 30 && hoursLeft > 1,
     ];
     let stage = -1;
-    for (let i = r.reminder_count; i < stages.length; i++) if (stages[i]!()) { stage = i; break; }
-    if (stage < 0) continue;
+    for (let k = r.reminder_count; k < stages.length; k++) if (stages[k]!()) { stage = k; break; }
+    // Batched requests (no email yet) ride along with any follow-up going to the same coach.
+    if (stage >= 0) due.set(r.coach_id, [...(due.get(r.coach_id) ?? []), { r, stage }]);
+  }
+  for (const [coachId, items] of due) {
+    if (outOfTime()) { out.partial = true; break; }
     await safe("reminder", async () => {
-      const coach = await deps.store.getCoach(r.coach_id);
+      const coach = await deps.store.getCoach(coachId);
       if (!coach?.email || coach.opted_out) return;
-      const n = stage + 1;
-      const claimed = await deps.store.casRequest(r.id, { status: ["coach_notified", "accepted"] }, { reminder_count: n, last_reminder_at: nowIso });
-      // (claimed is null if the coach just responded — then no follow-up goes out)
-      if (!claimed) return;
-      await sendEmail(deps, {
-        to: coach.email,
-        rendered: coachInvite({
-          req: r, coach, reviewUrl: coachReviewUrl(r), declineUrl: coachDeclineUrl(r),
-          unsubscribeUrl: unsubscribeUrl(coach.email), postalAddress: env.postalAddress(),
-          reminder: { daysLeft: Math.max(1, Math.round(hoursLeft / 24)), nudge: stage === 0 },
-          hubUrl: hubUrl(coach),
-        }),
-        template: "coach_reminder",
-        idempotencyKey: `coach-reminder-${r.id}-${n}`,
-        requestId: r.id,
-        coachId: coach.id,
-        marketing: true,
-      });
-      await textCoach(deps, coach, r, smsText.coachReminder(r, coachReviewUrl(r), Math.max(1, Math.round(hoursLeft / 24))), `coach-sms-reminder-${r.id}-${n}`, "coach_reminder");
+      const claimed: { r: EvalRequest; stage: number }[] = [];
+      for (const it of items) {
+        const c = await deps.store.casRequest(it.r.id, { status: ["coach_notified", "accepted"] }, { reminder_count: it.stage + 1, last_reminder_at: nowIso });
+        if (c) claimed.push({ r: c, stage: it.stage }); // null = coach just responded → skip
+      }
+      if (!claimed.length) return;
+      // Include any other open requests for this coach so the email shows everything waiting.
+      const others = (await deps.store.listRequests({ coach_id: coachId, status: ["coach_notified", "accepted"] }))
+        .filter((o) => !claimed.some((c) => c.r.id === o.id) && o.expires_at && Date.parse(o.expires_at) > now.getTime());
+      const all = [...claimed.map((c) => c.r), ...others].sort((a, b) => a.expires_at!.localeCompare(b.expires_at!));
+      const finalDay = claimed.some((c) => c.stage === 2);
+      const key = `coach-followup-${coachId}-${claimed.map((c) => `${c.r.id.slice(0, 8)}${c.stage}`).sort().join("")}`.slice(0, 200);
+      if (all.length === 1) {
+        const r = all[0]!;
+        const hoursLeft = (Date.parse(r.expires_at!) - now.getTime()) / HOUR;
+        await sendEmail(deps, {
+          to: coach.email!,
+          rendered: coachInvite({
+            req: r, coach, reviewUrl: coachReviewUrl(r), declineUrl: coachDeclineUrl(r),
+            unsubscribeUrl: unsubscribeUrl(coach.email!), postalAddress: env.postalAddress(),
+            reminder: { daysLeft: Math.max(1, Math.round(hoursLeft / 24)), nudge: claimed[0]!.stage === 0 },
+            hubUrl: hubUrl(coach),
+          }),
+          template: "coach_reminder", idempotencyKey: key, requestId: r.id, coachId: coach.id, marketing: true,
+        });
+        await textCoach(deps, coach, r, smsText.coachReminder(r, coachReviewUrl(r), Math.max(1, Math.round(hoursLeft / 24))), `sms-${key}`, "coach_reminder");
+      } else {
+        await sendEmail(deps, {
+          to: coach.email!,
+          rendered: coachDigest({
+            coach, items: all.map((r) => ({ req: r, url: coachReviewUrl(r) })), hubUrl: hubUrl(coach),
+            unsubscribeUrl: unsubscribeUrl(coach.email!), postalAddress: env.postalAddress(), finalDay,
+          }),
+          template: "coach_digest", idempotencyKey: key, coachId: coach.id, marketing: true,
+        });
+        await textCoach(deps, coach, null, smsText.coachDigest(all.length, all.reduce((s, r) => s + r.coach_payout_cents, 0), hubUrl(coach)), `sms-${key}`, "coach_digest");
+      }
       out.reminders++;
     });
   }

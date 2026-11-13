@@ -10,7 +10,7 @@ Estimated time: ~2 hours of setup, plus Stripe and Resend verification wait time
 | Vercel | Hosting, daily cron job, SSL | **Free (Hobby) works.** The cron runs once a day |
 | Supabase | Postgres + private video storage | You already have Pro (daily backups, large uploads) |
 | Stripe | Checkout, refunds, Connect payouts | Pay-as-you-go |
-| Resend | Transactional email | Free up to 3,000 emails/month |
+| Resend | Email to coaches + families | Free tier is capped at 100 emails/day — **use Resend Pro ($20/mo, 50k emails)** before launch, Scale beyond that |
 | Twilio | Text alerts to coaches (+ order alerts to you) | ~$0.01 per text; you already have an approved account |
 
 ## 1. Supabase (inside your existing project — no extra cost)
@@ -70,6 +70,23 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook --forward-connect-t
 4. `EMAIL_FROM="The Athlete Market <evaluations@mail.theathletemarket.com>"`, `EMAIL_REPLY_TO=` a real monitored inbox.
 5. Set `COMPANY_POSTAL_ADDRESS` to a real mailing address (CAN-SPAM).
 
+## 3a. Email at high volume (thousands per day)
+
+Coach emails are the growth engine, so inbox placement matters more than anything else.
+
+1. **Send from a subdomain** (`mail.theathletemarket.com`) with SPF, DKIM and a DMARC record (`v=DMARC1; p=none; rua=mailto:you@…`),
+   so problems never affect the main domain's email.
+2. **Bounce & spam-complaint webhook:** Resend → Webhooks → add `https://marketplace.theathletemarket.com/api/resend/webhook`
+   for `email.bounced` and `email.complained`; put its signing secret in `RESEND_WEBHOOK_SECRET`. The app then never emails
+   that address again, marks the coach unreachable, releases waiting families immediately (not charged) and offers them another coach.
+3. **Warm up the domain.** New sending domains that jump to thousands of cold emails a day land in spam. Ramp roughly:
+   week 1 ≈ 50/day → week 2 ≈ 150/day → week 3 ≈ 400/day → week 4 ≈ 1,000/day → then double weekly while bounce rate stays
+   under 2% and complaints under 0.1% (watch Resend → Metrics).
+4. **Already built in:** one email per coach (new requests batch behind an unopened one; follow-ups combine into
+   "N families waiting — $X"), one-click unsubscribe headers, automatic retry when Resend rate-limits a burst.
+5. **Import clean lists.** Only import coach emails you got from public staff/team pages; remove role addresses
+   (`info@`, `athletics@`) and obviously stale entries — bounces are what hurt reputation most.
+
 ## 3b. Twilio (text alerts)
 
 1. Twilio Console → **Messaging → Services**: use the Messaging Service attached to your approved A2P 10DLC campaign.
@@ -98,7 +115,10 @@ openssl rand -base64 48
 
    Use a different value for each of `APP_SECRET`, `CRON_SECRET`, and `ADMIN_PASSWORD`. Do **not** set `DEMO_MODE`.
 4. Deploy. Check `https://<project>.vercel.app/api/health` — every `configured` flag should be `true` and `db` should be `ok`.
-5. Cron: `vercel.json` runs `/api/cron` once a day (14:00 UTC; Hobby may run it any time within that hour). Vercel sends
+5. Background sweep: **run it every 10 minutes from Supabase** (free): edit `supabase/cron.sql` (your `CRON_SECRET`) and
+   run it in the SQL Editor. `vercel.json` also runs it once a day as a backup. Each run is time-boxed (~50s) and safe to
+   overlap, so it keeps up at high volume on the free Vercel plan.
+   Previously: `vercel.json` runs `/api/cron` once a day (14:00 UTC; Hobby may run it any time within that hour). Vercel sends
    `Authorization: Bearer $CRON_SECRET` automatically. What runs immediately vs. daily:
    * **Immediate** (no cron needed): checkout, coach email, coach decline → hold released, video submit → charge → delivery → payout,
      and rejecting submissions after the deadline.

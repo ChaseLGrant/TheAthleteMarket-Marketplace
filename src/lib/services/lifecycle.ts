@@ -53,9 +53,9 @@ export async function createRequestAndCheckout(
   deps: Deps, input: RequestInput, ctx: { ip: string },
 ): Promise<{ url: string; requestId: string }> {
   const { store } = deps;
-  if (!(await store.rateLimit(`checkout:ip:${ctx.ip}`, 3600, 12)))
+  if (!(await store.rateLimit(`checkout:ip:${ctx.ip}`, 3600, 40)))
     throw new UserFacingError("Too many requests from this network. Please try again in an hour.", "rate_limited");
-  if (!(await store.rateLimit(`checkout:email:${input.purchaserEmail}`, 3600, 6)))
+  if (!(await store.rateLimit(`checkout:email:${input.purchaserEmail}`, 3600, 15)))
     throw new UserFacingError("Too many requests for this email. Please try again in an hour.", "rate_limited");
 
   const coach = await store.getCoachBySlug(input.coachSlug);
@@ -220,6 +220,19 @@ export async function notifyCoach(deps: Deps, requestId: string) {
   if (!gate.ok || suppressed) {
     await event(deps, req, "coach_unavailable_at_payment", "system", null, null, { reasons: gate.reasons, suppressed });
     await refundRequest(deps, req.id, "unavailable", "system");
+    return;
+  }
+  // High volume: one email per coach, not one per request. If they already have an unopened request
+  // from the last 12 hours, this one joins their next combined follow-up ("N families waiting — $X").
+  const cutoff = deps.now().getTime() - 12 * 3_600_000;
+  const pendingUnopened = (await deps.store.listRequests({ coach_id: coach.id, status: ["coach_notified"] }))
+    .some((o) => o.id !== req.id && !o.coach_viewed_at && o.coach_notified_at && Date.parse(o.coach_notified_at) > cutoff);
+  if (pendingUnopened) {
+    const b = await deps.store.casRequest(req.id, { status: ["paid"] }, { status: "coach_notified", coach_notified_at: iso(deps.now()), last_error: null });
+    if (b) {
+      await event(deps, b, "coach_notified_batched", "system", "paid", "coach_notified", { reason: "coach has an unopened request; included in next combined email" });
+      await deps.store.updateCoach(coach.id, { requests_received: coach.requests_received + 1 }).catch(() => {});
+    }
     return;
   }
   try {
@@ -603,12 +616,15 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
       await event(deps, done, captured ? "refunded" : "hold_released", actor, req.status, "refunded", { why, refund: refund.id });
       // Revoke any delivery link. The coach link stays valid so it can show a friendly "closed" page;
       // every coach action re-checks status, so it can no longer submit or trigger payment.
-      await deps.store.casRequest(req.id, {}, { delivery_link_nonce: randomUUID().replace(/-/g, "") });
+      const rotated = (await deps.store.casRequest(req.id, {}, { delivery_link_nonce: randomUUID().replace(/-/g, "") })) ?? done;
       try {
         const coach = (await deps.store.getCoach(done.coach_id))!;
         await sendEmail(deps, {
           to: done.purchaser_email,
-          rendered: purchaserRefunded({ req: done, coach, why, captured, postalAddress: env.postalAddress() }),
+          rendered: purchaserRefunded({
+            req: rotated, coach, why, captured, postalAddress: env.postalAddress(),
+            retryUrl: why === "admin" ? undefined : secondOpinionUrl(rotated),
+          }),
           template: "purchaser_refunded",
           idempotencyKey: `refund-email-${done.id}`,
           requestId: done.id,

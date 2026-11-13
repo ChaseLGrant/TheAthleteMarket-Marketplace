@@ -4,7 +4,7 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 
 ## Verified in this repo
 
-* **70 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
+* **79 automated tests** (`npm test`) covering pricing, the compliance gate, token signing, validation, film embeds, and the full
   lifecycle against an in-memory database with simulated Stripe and email: duplicate webhooks, concurrent payouts (exactly one
   transfer), late submissions rejected after the deadline, expiry → single refund, decline → single refund, failed refund retried
   by cron, refund blocked after payout, dispute holds payout until won, opt-out refunds open requests, coach capacity, rate limits, and the card-hold model: coach never emailed without a successful

@@ -32,7 +32,8 @@ describe("checkout", () => {
   it("rate limits by IP", async () => {
     const { deps } = makeDeps();
     await addCoach(deps);
-    for (let i = 0; i < 12; i++) await createRequestAndCheckout(deps, input({ purchaserEmail: `p${i}@example.com` }), { ip: "9.9.9.9" });
+    await deps.store.updateSettings({ max_open_requests_per_coach: 1000 });
+    for (let i = 0; i < 40; i++) await createRequestAndCheckout(deps, input({ purchaserEmail: `p${i}@example.com` }), { ip: "9.9.9.9" });
     await expect(createRequestAndCheckout(deps, input({ purchaserEmail: "z@example.com" }), { ip: "9.9.9.9" })).rejects.toThrow(/Too many/);
   });
 });
