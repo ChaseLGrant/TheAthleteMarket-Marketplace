@@ -104,6 +104,7 @@ export interface Store {
   insertOrder(o: Omit<Order, "id" | "created_at" | "status" | "stripe_customer_id" | "stripe_payment_method_id">): Promise<Order>;
   getOrder(id: string): Promise<Order | null>;
   getOrderBySession(sessionId: string): Promise<Order | null>;
+  getOrderByRef(ref: string): Promise<Order | null>;
   updateOrder(id: string, patch: Partial<Order>): Promise<Order>;
   addThreadMessage(m: Omit<ThreadMessage, "id" | "created_at">): Promise<void>;
   listThread(requestId: string): Promise<ThreadMessage[]>;

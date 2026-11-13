@@ -1,178 +1,133 @@
 import Link from "next/link";
-import { CoachCard } from "@/components/ui";
-import { SPORTS } from "@/lib/constants";
+import { HeroAsk } from "@/components/hero-ask";
+import { askPricing } from "@/lib/ask-pricing";
 import { money } from "@/lib/format";
-import { annotate, getDeps } from "@/lib/server";
+import { getDeps } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
 
 const STEPS = [
-  { n: "1", title: "Pick any coach", body: "Search by name, school or sport — or enter any coach's email. College coaches, grad assistants, pros." },
-  { n: "2", title: "Choose your reply", body: "A written take, a voice note or a video. Add your film link and pay in about a minute." },
-  { n: "3", title: "Get it in your inbox", body: "The coach replies from their own email. It lands in yours, with a text when it arrives." },
+  { n: "1", title: "Pick up to 5 colleges", body: "Type a school. We write the message for you — camp dates, events, what level you fit. Edit anything." },
+  { n: "2", title: "We get it to the right coach", body: "It goes to the recruiting coordinator first. No answer? It moves to the next coach on staff automatically." },
+  { n: "3", title: "The answer hits your phone", body: "A text the second they open it and the second they answer. Reply to the email or text to keep talking." },
+];
+
+const ANSWERS = [
+  { icon: "⛺", label: "Camp invite", title: "Elite Prospect Camp", meta: "June 14–15 · On campus", cta: "Sign-up link included" },
+  { icon: "📍", label: "Where to be seen", title: "We'll be at the Summer Showcase", meta: "July 8–10 · Atlanta, GA", cta: "Get your athlete there" },
+  { icon: "🎯", label: "Honest level read", title: "Better fit at D2 right now", meta: "“Footwork is there — add 10 lbs.”", cta: "Know where to aim" },
 ];
 
 const FAQ = [
-  {
-    q: "What exactly do I get?",
-    a: "The coach's honest read on your film — what level they see you at (D1, D2, D3, NAIA, JUCO or not yet), your top strength, what to work on and your next step. As a written reply, a 1–2 minute voice note, or a 30–60 second video.",
-  },
-  {
-    q: "What if the coach doesn't reply?",
-    a: "Then you pay nothing. Your card is only held at checkout and charged when the coach replies. No reply within 5 days? The hold is released, and we'll help you pick another coach in one tap.",
-  },
-  {
-    q: "Do I need an account or an app?",
-    a: "No. You pay on one page. Everything after that happens in your own email (and texts, if you like). The coach's reply is yours to keep and forward.",
-  },
-  {
-    q: "Who are the coaches?",
-    a: "Any coach you want — college head coaches, assistants and grad assistants, former coaches, independent evaluators and professional players. If a coach hasn't joined yet, we email them your request. Listings aren't an endorsement by any coach, school or team.",
-  },
-  {
-    q: "Is this a recruiting offer?",
-    a: "No. It's one coach's honest feedback — not a recruiting contact, scholarship, admission decision or roster spot.",
-  },
-  {
-    q: "Is my child's information private?",
-    a: "Yes. Requests for athletes under 18 are placed by a parent or guardian. Messages go through The Athlete Market, so the coach never gets your email or phone number, and you never need theirs.",
-  },
+  { q: "What if no one answers?", a: "Then that school is free. We save your card at checkout and only charge each school when a coach there actually answers. No answer in 5 days = $0 for that school." },
+  { q: "Who gets my message?", a: "We route it to the right person on that staff — usually the recruiting coordinator or an assistant. If they don't answer within 48 hours, it automatically goes to the next coach. The first coach to answer is the one you hear from." },
+  { q: "Why would a coach answer?", a: "They get paid to — every answer earns them money, and answering takes one tap: share camp dates, an event they'll be at, or their honest read. No logins, no apps." },
+  { q: "Can I use my own email?", a: "Yes. Every school has a Coach Line address. Email it straight from Gmail or any inbox and we take it from there. The first time we'll ask for your athlete's details; after that, just reply YES." },
+  { q: "Can I keep talking to the coach?", a: "Yes. Reply to the answer email or the text and it goes straight to the coach who answered. Your email and phone number stay private." },
+  { q: "Do I need an account or app?", a: "No. One page to send, then everything happens in your email and texts." },
+  { q: "Is an answer a recruiting offer?", a: "No. It's a coach's reply to your question — camp info, events, film feedback or fit — not an offer, scholarship or roster spot." },
 ];
 
 export default async function Home() {
   const deps = await getDeps();
   const settings = await deps.store.getSettings();
-  const fp = settings.format_prices;
-  const joined = (await deps.store.searchCoaches({ availableOnly: true, limit: 6 })).coaches;
-  const more = joined.length < 6 ? (await deps.store.searchCoaches({ limit: 12 })).coaches.filter((c) => !joined.some((j) => j.id === c.id)) : [];
-  const featured = annotate([...joined, ...more].slice(0, 6), settings).filter((x) => x.availability !== "unavailable");
-  const fromPrice = Math.min(fp.written, fp.voice, fp.video);
-
-  const formats = [
-    { icon: "✍️", title: "Written take", price: fp.written, body: "Level read, top strength, what to fix, next step." },
-    { icon: "🎙️", title: "Voice note", price: fp.voice, body: "1–2 minutes in the coach's own voice." },
-    { icon: "🎥", title: "Video breakdown", price: fp.video, body: "A personal 30–60 second video." },
-  ];
+  const packs = [1, 3, 5].map((n) => ({ n, total: askPricing(settings.ask_prices, n).total }));
+  const coachEarns = Math.round((packs[0]!.total * settings.ask_coach_share_bps) / 10_000);
 
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-navy text-white">
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-60" style={{ background: "radial-gradient(60rem 30rem at 85% -10%, rgba(31,95,255,.55), transparent 60%), radial-gradient(40rem 20rem at 0% 120%, rgba(31,95,255,.35), transparent 60%)" }} />
+      <section className="relative bg-navy text-white">
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden opacity-60" style={{ background: "radial-gradient(60rem 30rem at 85% -10%, rgba(31,95,255,.55), transparent 60%), radial-gradient(40rem 20rem at 0% 120%, rgba(31,95,255,.35), transparent 60%)" }} />
         <div className="container-page relative pb-20 pt-14 sm:pb-28 sm:pt-24">
           <p className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-[#BFD0FF] ring-1 ring-white/15">
-            A real reply — or you pay nothing
+            Coach Line · Answered or it&apos;s free
           </p>
-          <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
-            Ask any college coach what level they see you at.
-          </h1>
+          <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">The direct line to college coaches.</h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#C9D3EA]">
-            Their honest reply lands in your inbox — written, voice note or video. From {money(fromPrice)}. No account, no app.
+            Ask any staff about camp dates, the events they&apos;ll be at, and what level you fit. Get a real answer — or pay nothing.
           </p>
-          <form action="/coaches" className="mt-8 flex max-w-2xl flex-col gap-2 rounded-2xl bg-white p-2 shadow-[0_20px_60px_-20px_rgba(0,0,0,.5)] sm:flex-row">
-            <label htmlFor="hero-q" className="sr-only">Search coaches</label>
-            <input id="hero-q" name="q" placeholder="Coach name, college or team" className="h-12 flex-1 rounded-xl px-4 text-[16px] text-navy outline-none placeholder:text-subtle" />
-            <label htmlFor="hero-sport" className="sr-only">Sport</label>
-            <select id="hero-sport" name="sport" defaultValue="" className="field h-12 border-0 bg-surface sm:w-48">
-              <option value="">All sports</option>
-              {SPORTS.map((s) => <option key={s}>{s}</option>)}
-            </select>
-            <button className="btn-primary h-12 sm:px-7">Find a coach</button>
-          </form>
-          <p className="mt-4 text-sm text-[#C9D3EA]">
-            Know who you want? <Link href="/coaches/add" className="font-semibold text-white underline">Enter any coach&apos;s email →</Link>
-          </p>
+          <div className="mt-8"><HeroAsk /></div>
+          <p className="mt-4 text-sm text-[#C9D3EA]">From {money(packs[0]!.total)} a school · {money(packs[2]!.total)} for 5 · no account, no app</p>
         </div>
       </section>
 
-      {/* Formats */}
-      <section className="container-page -mt-10">
-        <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {formats.map((f) => (
-            <div key={f.title} className="card flex items-center gap-4 p-5 sm:flex-col sm:items-start">
-              <span aria-hidden className="text-3xl">{f.icon}</span>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">{f.title}</p>
-                <p className="text-sm text-muted">{f.body}</p>
-              </div>
-              <p className="text-xl font-bold">{money(f.price)}</p>
+      {/* What you get back */}
+      <section className="container-page py-16">
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Answers you can act on</h2>
+        <p className="mt-2 max-w-2xl text-muted">Coaches answer in one tap, so you get the thing that actually moves recruiting forward.</p>
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {ANSWERS.map((a) => (
+            <div key={a.label} className="card min-w-0 p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue">{a.icon} {a.label}</p>
+              <p className="mt-3 text-lg font-bold">{a.title}</p>
+              <p className="text-sm text-muted">{a.meta}</p>
+              <p className="mt-4 text-sm font-semibold text-navy">{a.cta}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how" className="container-page py-16">
-        <p className="eyebrow">How it works</p>
-        <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">One page. Then it all happens in your inbox.</h2>
-        <ol className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {STEPS.map((s) => (
-            <li key={s.n} className="card p-6">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue text-sm font-bold text-white">{s.n}</span>
-              <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{s.body}</p>
-            </li>
-          ))}
-        </ol>
+      {/* How */}
+      <section id="how" className="border-y border-line bg-surface">
+        <div className="container-page py-16">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How it works</h2>
+          <ol className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
+            {STEPS.map((s) => (
+              <li key={s.n} className="min-w-0">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-blue text-lg font-bold text-white">{s.n}</span>
+                <h3 className="mt-4 text-lg font-bold">{s.title}</h3>
+                <p className="mt-1 text-[15px] leading-relaxed text-muted">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
-      {/* Guarantee */}
+      {/* Pricing */}
+      <section id="pricing" className="container-page py-16">
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Only pay for answers</h2>
+        <p className="mt-2 text-muted">Your card is saved, not charged. Each school is charged only when a coach there answers.</p>
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {packs.map((p) => (
+            <Link key={p.n} href="/ask" className={`card min-w-0 p-6 transition hover:-translate-y-0.5 ${p.n === 3 ? "ring-2 ring-blue" : ""}`}>
+              {p.n === 3 && <p className="mb-2 text-xs font-bold uppercase tracking-wider text-blue">Most popular</p>}
+              <p className="text-sm font-semibold text-muted">{p.n} school{p.n === 1 ? "" : "s"}</p>
+              <p className="mt-1 text-4xl font-bold">{money(p.total)}</p>
+              <p className="mt-1 text-sm text-muted">{p.n > 1 ? `${money(Math.round(p.total / p.n))} per school` : "One staff, one answer"}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Gmail */}
       <section className="container-page pb-16">
-        <div className="grid grid-cols-1 items-center gap-8 rounded-3xl bg-blue-50 p-8 sm:p-12 md:grid-cols-[1.2fr_1fr]">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">A real reply, or you pay nothing.</h2>
-            <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              We hold your card at checkout and only charge it when the coach replies. If they don&apos;t reply within {settings.deadline_days} days,
-              the hold is released automatically — and we&apos;ll help you ask another coach in one tap, with your details already saved.
+        <div className="card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:p-8">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold">Live in Gmail? Stay there.</h2>
+            <p className="mt-1 text-[15px] leading-relaxed text-muted">
+              Every school has a Coach Line address. Email it from your own inbox and we&apos;ll route it to the right coach. After your first message, sending another is as simple as replying <strong>YES</strong>.
             </p>
           </div>
-          <dl className="grid grid-cols-2 gap-3 text-center">
-            {[[money(fromPrice), "starting price"], [`${settings.deadline_days} days`, "reply window"], ["$0", "if no reply"], ["0", "accounts or apps"]].map(([k, v]) => (
-              <div key={v} className="rounded-2xl bg-white p-4 ring-1 ring-blue-100">
-                <dt className="text-2xl font-bold text-navy">{k}</dt>
-                <dd className="text-xs text-muted">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          <Link href="/ask" className="btn-ghost shrink-0">Find a school&apos;s address</Link>
         </div>
       </section>
 
       {/* Coaches */}
-      <section className="border-y border-line bg-surface">
-        <div className="container-page py-16">
-          <div className="mb-6 flex items-end justify-between gap-4">
-            <div>
-              <p className="eyebrow">Ask any coach</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Coaches families are asking</h2>
-            </div>
-            <Link href="/coaches" className="text-sm font-semibold text-blue hover:underline">See all →</Link>
+      <section className="bg-navy text-white">
+        <div className="container-page flex flex-col gap-6 py-14 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-2xl font-bold tracking-tight">Coaches: get paid for the emails you already answer.</h2>
+            <p className="mt-2 max-w-xl text-[#C9D3EA]">
+              Every message comes with the film, grad year and position. Answer in one tap — camp dates, an event, your honest read — and earn {money(coachEarns)}+ per answer. Save your camps once; next time it&apos;s one tap.
+            </p>
           </div>
-          {featured.length ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {featured.map(({ coach, availability }) => (
-                <CoachCard key={coach.id} coach={coach} availability={availability} tiers={settings.price_tiers_cents} fromPrice={fromPrice} />
-              ))}
-            </div>
-          ) : (
-            <p className="card p-8 text-center text-muted"><Link className="font-semibold text-blue" href="/coaches/add">Ask any coach by email</Link>.</p>
-          )}
-        </div>
-      </section>
-
-      {/* For coaches */}
-      <section className="container-page py-16">
-        <div className="card flex flex-col items-start gap-4 p-8 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="eyebrow">For coaches</p>
-            <p className="mt-1 text-xl font-bold">Make side money from your inbox — no camps, no app.</p>
-            <p className="mt-1 text-muted">Families send you their film. You reply in about 2 minutes. You keep 80%.</p>
-          </div>
-          <Link href="/join" className="btn-navy shrink-0">Claim your coach profile</Link>
+          <Link href="/join" className="btn-primary shrink-0">Start getting paid</Link>
         </div>
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="container-page pb-8">
+      <section id="faq" className="container-page py-16">
         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Questions</h2>
         <div className="mt-6 divide-y divide-line rounded-2xl border border-line">
           {FAQ.map((f) => (
@@ -185,12 +140,14 @@ export default async function Home() {
             </details>
           ))}
         </div>
+        <p className="mt-8 text-sm text-muted">
+          Want a full film breakdown instead? <Link href="/coaches" className="font-semibold text-blue">Get a written, voice or video evaluation →</Link>
+        </p>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "FAQPage",
+              "@context": "https://schema.org", "@type": "FAQPage",
               mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
             }),
           }}

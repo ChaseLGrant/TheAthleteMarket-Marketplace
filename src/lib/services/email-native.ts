@@ -298,16 +298,8 @@ async function processAskReply(deps: Deps, msg: InboundEmail, req: EvalRequest):
   const coach = chain.find((c) => c?.email && c.email.toLowerCase() === msg.from.toLowerCase()) ?? (await deps.store.getCoach(req.coach_id))!;
   const parsed = line.parseAskReply(body);
   if (!parsed) return "empty";
-  if (parsed === "pass") {
-    // On a staff chain, a pass from one coach moves it to the next instead of ending it.
-    if (req.escalation_index < req.escalation_ids.length - 1) {
-      await deps.store.casRequest(req.id, { status: ["coach_notified", "accepted"] }, { escalated_at: "1970-01-01T00:00:00.000Z" });
-      await line.escalateAsks(deps);
-      return "passed_on";
-    }
-    await declineRequest(deps, req, "Coach passed", "coach");
-    return "declined";
-  }
+  // On a staff chain, a pass from one coach moves it to the next instead of ending it.
+  if (parsed === "pass") return line.passAsk(deps, req, coach);
   if ((parsed.kind === "camp" && !coach.camps?.length) || (parsed.kind === "event" && !coach.events?.length)) {
     // Keyword without saved details → treat the rest as a personal note if there is one; else ask them to tap.
     if (parsed.note && parsed.note.length > 10) { parsed.kind = "personal"; }

@@ -136,7 +136,7 @@ export async function handleAskSetupCompleted(deps: Deps, sessionId: string) {
     await deps.store.upsertSavedPayer({
       email: first.purchaser_email, stripe_customer_id: customerId, stripe_payment_method_id: paymentMethodId,
       name: first.purchaser_name, phone: first.purchaser_phone, athlete_name: first.athlete_name,
-      athlete_grad_year: first.grad_year, athlete_position: first.position, athlete_sport: first.sport,
+      athlete_grad_year: first.grad_year, athlete_position: first.position, athlete_sport: first.sport, athlete_film_url: first.film_url,
     });
   }
   const sent: { school: string; price: number }[] = [];
@@ -470,13 +470,14 @@ export async function handleParentEmail(deps: Deps, a: { from: string; subject: 
   const settings = await deps.store.getSettings();
   const school = a.target.kind === "coach" ? a.target.coach.school ?? a.target.coach.full_name : a.target.school;
   const sport = a.target.kind === "coach" ? a.target.coach.sport : a.target.sport;
-  const film = a.body.match(/https:\/\/[^\s<>()"']+/)?.[0] ?? null;
+  const payer = await deps.store.getSavedPayer(a.from);
+  // A returning parent doesn't have to paste their film again.
+  const film = a.body.match(/https:\/\/[^\s<>()"']+/)?.[0] ?? payer?.athlete_film_url ?? null;
   const draft = await deps.store.insertDraft({
     from_email: a.from.toLowerCase(), target_school: school, target_sport: sport,
     coach_id: a.target.kind === "coach" ? a.target.coach.id : null, subject: a.subject.slice(0, 200), message: a.body.slice(0, 2000), film_url: film,
   });
   const price = askPricing(settings.ask_prices, 1).total;
-  const payer = await deps.store.getSavedPayer(a.from);
   if (payer && payer.athlete_name && film) {
     await sendEmail(deps, {
       to: a.from, rendered: draftConfirmYes({ school, priceCents: price, athlete: payer.athlete_name, postalAddress: env.postalAddress() }),
@@ -541,3 +542,29 @@ export const askAnotherUrl = (req: EvalRequest) =>
   `${env.siteUrl()}/ask?from=${encodeURIComponent(new URL(secondOpinionUrl(req)).searchParams.get("from") ?? "")}`;
 
 export { refundRequest };
+
+/** Coach opened the answer page: record it and tell the parent once ("Coach X just opened your message"). */
+export async function markAskOpened(deps: Deps, req: EvalRequest, coach: Coach) {
+  const open: EvalRequest["status"][] = ["paid", "coach_notified", "accepted"];
+  if (!req.coach_viewed_at) await deps.store.casRequest(req.id, { status: open }, { coach_viewed_at: iso(deps.now()) });
+  if (req.parent_notified_open_at) return;
+  const r = await deps.store.casRequest(req.id, { status: open, isNull: ["parent_notified_open_at"] }, { parent_notified_open_at: iso(deps.now()) });
+  if (!r) return;
+  await deps.store.addEvent({ request_id: r.id, type: "coach_viewed", actor: "coach", from_status: r.status, to_status: r.status, data: { coach: coach.full_name } });
+  if (r.purchaser_phone && r.purchaser_sms_opt_in_at)
+    await sendSms(deps, { to: r.purchaser_phone, body: lineSms.parentOpened(`${coach.full_name}${coach.school ? ` (${coach.school})` : ""}`), template: "parent_opened", dedupeKey: `parent-opened-${r.id}`, requestId: r.id }).catch(() => {});
+}
+
+/** Coach taps "Not me — pass it on": next coach on staff gets it; the last one passing releases the hold. */
+export async function passAsk(deps: Deps, req: EvalRequest, coach: Coach): Promise<"passed_on" | "declined" | "closed"> {
+  if (!["paid", "coach_notified", "accepted"].includes(req.status)) return "closed";
+  if (req.escalation_index < req.escalation_ids.length - 1) {
+    await deps.store.casRequest(req.id, { status: ["paid", "coach_notified", "accepted"] }, { escalated_at: "1970-01-01T00:00:00.000Z" });
+    await escalateAsks(deps);
+    await deps.store.addEvent({ request_id: req.id, type: "passed", actor: "coach", from_status: req.status, to_status: req.status, data: { coach: coach.full_name } });
+    return "passed_on";
+  }
+  const { declineRequest } = await import("./lifecycle");
+  await declineRequest(deps, req, "Coach passed", "coach");
+  return "declined";
+}

@@ -85,6 +85,7 @@ create table if not exists saved_payers (
   athlete_grad_year int,
   athlete_position text,
   athlete_sport text,
+  athlete_film_url text,
   updated_at timestamptz not null default now()
 );
 alter table saved_payers enable row level security;

@@ -240,6 +240,13 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
         return [k, v];
       })) as { written: number; voice: number; video: number },
       commission_bps: Math.round(pct * 100),
+      ask_prices: Object.fromEntries((["1", "3", "5"] as const).map((n) => {
+        const v = Math.round(Number(fd.get(`ask_${n}`)) * 100);
+        if (!(v >= 500 && v <= 100_000)) throw new Error(`Enter a Coach Line price between $5 and $1,000 for ${n} school(s)`);
+        return [n, v];
+      })),
+      ask_coach_share_bps: Math.round(Math.min(100, Math.max(0, Number(fd.get("ask_share")) || 0)) * 100),
+      escalate_after_hours: Math.min(72, Math.max(6, Number(fd.get("escalate_hours")) || 48)),
       deadline_days: Math.min(6, Math.max(1, Number(fd.get("deadline_days")) || 5)), // card holds expire after ~5–7 days
       max_open_requests_per_coach: Math.min(200, Math.max(1, Number(fd.get("max_open")) || 15)),
       retention_days: Math.min(3650, Math.max(30, Number(fd.get("retention_days")) || 365)),

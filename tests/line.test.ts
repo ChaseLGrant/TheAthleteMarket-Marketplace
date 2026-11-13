@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { addCoach, makeDeps } from "./helpers";
 import {
   askPricing, buildChain, createAskOrder, handleAskSetupCompleted, parentThreadAddress, resolveDraftToken,
-  schoolLineAddress, staffRank, submitAnswer, handleParentSms, type AskInput,
+  schoolLineAddress, staffRank, submitAnswer, handleParentSms, markAskOpened, passAsk, answerUrl, resolveAnswerLink, type AskInput,
 } from "@/lib/services/line";
 import { handleInboundEmail, replyAddress } from "@/lib/services/email-native";
 import { runCron } from "@/lib/services/cron";
+import { twilioSignature } from "@/lib/twilio-signature";
 
 const SCHOOL = "Example University";
 type D = ReturnType<typeof makeDeps>["deps"];
@@ -204,5 +205,36 @@ describe("coach share setting", () => {
     const r = await submitAnswer(deps, req!, rc, { kind: "update", via: "link" });
     expect(r.payout_status).toBe("none");
     expect(deps.payments.transfers).toHaveLength(0);
+  });
+});
+
+describe("coach answer page actions", () => {
+  it("opening the page texts the parent once; pass-on hands it to the next coach; answer link scoped to the chain", async () => {
+    const { deps } = makeDeps();
+    const { rc, asst } = await staff(deps);
+    const [r] = await place(deps);
+    await markAskOpened(deps, r!, rc);
+    await markAskOpened(deps, (await deps.store.getRequest(r!.id))!, rc);
+    expect(texts(deps, "+15552223333").filter((t) => /just opened your message/.test(t))).toHaveLength(1);
+
+    const link = answerUrl(r!, rc).split("/a/")[1]!;
+    expect((await resolveAnswerLink(deps, link))?.coach.id).toBe(rc.id);
+    expect(await resolveAnswerLink(deps, link.slice(0, -2) + "zz")).toBeNull();
+
+    expect(await passAsk(deps, (await deps.store.getRequest(r!.id))!, rc)).toBe("passed_on");
+    const after = (await deps.store.getRequest(r!.id))!;
+    expect(after.escalation_index).toBe(1);
+    expect(mails(deps, "asst@example.edu").length).toBeGreaterThan(0);
+    const done = await submitAnswer(deps, after, asst, { kind: "level", level: "D2", note: "Good feet.", via: "link" });
+    expect(done.status).toBe("completed");
+    expect(done.coach_id).toBe(asst.id);
+  });
+
+  it("twilio signature matches Twilio's documented algorithm", () => {
+    // Example from Twilio's security docs.
+    const sig = twilioSignature("12345", "https://mycompany.com/myapp.php?foo=1&bar=2", {
+      CallSid: "CA1234567890ABCDE", Caller: "+12349013030", Digits: "1234", From: "+12349013030", To: "+18005551212",
+    });
+    expect(sig).toBe("0/KCTR6DLpKmkAf8muzZqo1nDgQ=");
   });
 });

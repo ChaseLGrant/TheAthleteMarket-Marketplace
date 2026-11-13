@@ -225,6 +225,7 @@ export class MemoryStore implements Store {
   }
   async getOrder(id: string) { return clone(this.orders.get(id) ?? null); }
   async getOrderBySession(sid: string) { return clone([...this.orders.values()].find((o) => o.stripe_checkout_session_id === sid) ?? null); }
+  async getOrderByRef(ref: string) { return clone([...this.orders.values()].find((o) => o.ref === ref) ?? null); }
   async updateOrder(id: string, patch: Partial<Order>) { const o = this.orders.get(id)!; Object.assign(o, patch); return clone(o); }
   async addThreadMessage(m: Omit<ThreadMessage, "id" | "created_at">) { this.thread.push({ ...m, id: this.seq++, created_at: nowIso() }); }
   async listThread(requestId: string) { return clone(this.thread.filter((t) => t.request_id === requestId)); }

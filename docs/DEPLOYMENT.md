@@ -32,6 +32,9 @@ Supabase project you already pay for. Your main site's tables (in `public`) are 
    `SUPABASE_SERVICE_ROLE_KEY`. Never put the service role key in a `NEXT_PUBLIC_` variable or share it in chat.
 5. Keep `SUPABASE_DB_SCHEMA=marketplace` and `SUPABASE_VIDEO_BUCKET=marketplace-videos` (these are also the defaults).
 
+**Already ran `setup.sql` before Coach Line existed?** Don't run it again (it isn't meant to run twice). Instead paste only
+`supabase/migrations/0008_coach_line.sql` into a new query and Run it. It adds the Coach Line tables and settings.
+
 To see the data later: **Table Editor → schema dropdown (top-left) → `marketplace`**.
 
 ## 2. Stripe
@@ -119,6 +122,10 @@ by the coach's mail app — those links are accepted too, and the email also off
 5. Your A2P campaign description should match what we send: "Transactional alerts to opted-in coaches about new evaluation requests
    and deadlines." Opt-in happens on the coach application form or the coach hub (checkbox with STOP/HELP wording); the privacy
    policy states mobile numbers are never shared for marketing.
+
+6. **Two-way texting (Coach Line):** Messaging Service → **Integration** → "Send a webhook" →
+   `https://marketplace.theathletemarket.com/api/inbound/twilio` (HTTP POST). Parents can then text back and it's relayed to the
+   coach who answered. Every request is checked against Twilio's signature, so nobody else can post to it.
 
 If Twilio isn't configured, the app simply skips texts and uses email only.
 

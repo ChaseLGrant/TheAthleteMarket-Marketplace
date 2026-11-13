@@ -12,7 +12,7 @@ export interface AskDraft {
 }
 export interface SavedPayer {
   email: string; stripe_customer_id: string; stripe_payment_method_id: string; name: string | null; phone: string | null;
-  athlete_name: string | null; athlete_grad_year: number | null; athlete_position: string | null; athlete_sport: string | null; updated_at: string;
+  athlete_name: string | null; athlete_grad_year: number | null; athlete_position: string | null; athlete_sport: string | null; athlete_film_url: string | null; updated_at: string;
 }
 export interface Order {
   id: string; ref: string; stripe_checkout_session_id: string | null; stripe_customer_id: string | null;

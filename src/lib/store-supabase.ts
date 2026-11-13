@@ -258,6 +258,9 @@ export class SupabaseStore implements Store {
   async getOrderBySession(sid: string) {
     return must(await this.db.from("orders").select("*").eq("stripe_checkout_session_id", sid).maybeSingle(), "order.session") as Order | null;
   }
+  async getOrderByRef(ref: string) {
+    return must(await this.db.from("orders").select("*").eq("ref", ref).maybeSingle(), "order.ref") as Order | null;
+  }
   async updateOrder(id: string, patch: Partial<Order>) {
     return must(await this.db.from("orders").update(patch).eq("id", id).select("*").single(), "order.update") as Order;
   }

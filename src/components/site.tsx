@@ -12,10 +12,10 @@ export function SiteHeader() {
           <Logo />
         </Link>
         <nav className="flex items-center gap-1 text-sm font-medium text-navy">
-          <Link href="/coaches" className="hidden rounded-lg px-3 py-2 hover:bg-surface sm:block">Find a coach</Link>
+          <Link href="/#pricing" className="hidden rounded-lg px-3 py-2 hover:bg-surface sm:block">Pricing</Link>
           <Link href="/#how" className="hidden rounded-lg px-3 py-2 hover:bg-surface md:block">How it works</Link>
           <Link href="/join" className="hidden rounded-lg px-3 py-2 hover:bg-surface md:block">For coaches</Link>
-          <Link href="/coaches" className="btn-primary btn-sm sm:hidden">Find a coach</Link>
+          <Link href="/ask" className="btn-primary btn-sm whitespace-nowrap">Ask a college</Link>
           <a href={MAIN} className="hidden rounded-lg px-3 py-2 text-muted hover:bg-surface lg:block">theathletemarket.com ↗</a>
         </nav>
       </div>
@@ -33,7 +33,8 @@ export function SiteFooter() {
         </div>
         <div className="space-y-2 text-sm">
           <p className="font-semibold text-navy">Families</p>
-          <Link className="block text-muted hover:text-navy" href="/coaches">Find a coach</Link>
+          <Link className="block text-muted hover:text-navy" href="/ask">Message a college</Link>
+          <Link className="block text-muted hover:text-navy" href="/coaches">Film evaluations</Link>
           <Link className="block text-muted hover:text-navy" href="/#faq">FAQ</Link>
           <a className="block text-muted hover:text-navy" href={MAIN}>The Athlete Market</a>
         </div>

@@ -14,6 +14,9 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
   const r = await deps.store.getRequest(id);
   if (!r) notFound();
   const [coach, events, emails] = await Promise.all([deps.store.getCoach(r.coach_id), deps.store.listEvents(id), deps.store.listEmails({ request_id: id })]);
+  const [chain, thread] = r.format === "ask"
+    ? await Promise.all([Promise.all(r.escalation_ids.map((cid) => deps.store.getCoach(cid))), deps.store.listThread(r.id)])
+    : [[], []];
   const videoUrl = r.video_path ? await deps.storage.playbackUrl(r.video_path, 3600).catch(() => null) : null;
   const open = ["paid", "coach_notified", "accepted"].includes(r.status);
   const f = { id };
@@ -82,6 +85,29 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
       </div>
 
       {r.video_deleted_at && <p className="rounded-xl bg-surface px-4 py-3 text-sm text-muted">Video auto-deleted {dateTime(r.video_deleted_at)} (retention). Delivery record kept: {r.video_size_bytes ? `${(r.video_size_bytes / 1_048_576).toFixed(1)} MB` : ""}, {r.video_duration_seconds ?? "?"}s, viewed {r.video_view_count}×.</p>}
+      {r.format === "ask" && (
+        <section className="card p-5">
+          <h2 className="font-semibold">Coach Line · {r.target_school} {r.target_sport}</h2>
+          <ol className="mt-3 space-y-1 text-sm">
+            {chain.map((c, i) => (
+              <li key={c?.id ?? i} className={i === r.escalation_index ? "font-semibold" : "text-muted"}>
+                {i + 1}. {c?.full_name ?? "?"} — {c?.title ?? "coach"}{i < r.escalation_index ? " · no answer, passed on" : i === r.escalation_index ? " · current" : ""}{c?.id === r.coach_id && r.answer_kind ? " · ✅ answered" : ""}
+              </li>
+            ))}
+          </ol>
+          {r.answer_kind && <p className="mt-3 text-sm"><strong>Answer ({r.answer_kind}):</strong> {JSON.stringify(r.answer_payload)}</p>}
+          {thread.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-subtle">Thread ({thread.length})</p>
+              {thread.map((m) => (
+                <p key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.direction === "coach_to_parent" ? "bg-blue-50" : "bg-surface"}`}>
+                  <span className="text-xs text-muted">{m.direction === "coach_to_parent" ? "Coach" : "Parent"} · {m.channel} · {dateTime(m.created_at)}</span><br />{m.body}
+                </p>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       {(r.response_text || r.response_link) && (
         <section className="card p-5">
           <h2 className="font-semibold">Coach&apos;s reply</h2>

@@ -69,3 +69,27 @@ The parent uses one web page. The coach never needs a website at all — just th
 | 🎙️ Voice note | $35 | $28 | $7 | ≈ $5.68 |
 | 🎥 Video | $50 | $40 | $10 | ≈ $8.25 |
 No reply → $0 charged, $0 in fees.
+
+---
+
+# Coach Line (the main product): message a college, get an answer
+
+**Parent (≈90 seconds):**
+1. Homepage → type a college → pick the school's staff (or a specific coach). Up to 5 schools: 1 for $20, 3 for $49, 5 for $69.
+2. Tap what they want to know (camp dates, events, level, film). We write the message, and they can edit it.
+3. Athlete details, email, mobile → Stripe saves the card. **Nothing is charged yet.** One hold is placed per school.
+4. Texts: "Sent" → "Coach Dana Cole just opened your message 👀" → "Dana Cole answered! Camp invite: June 14–15."
+5. The answer email shows a camp/event card. **Replying to that email (or the text) goes straight to the coach.** Both sides' emails and numbers stay private.
+
+**Gmail option:** every school has an address like `lakeview-university--basketball-m@reply.theathletemarket.com` (the homepage shows it after you pick a school, with an "Email from Gmail" button). Email it from any inbox:
+* First time → we reply with a link where the message is already filled in. Add the athlete's details and card once.
+* After that → we reply "Reply YES to send ($20)". They reply YES, it's charged to the saved card only if answered, and it's sent. Everything happens in Gmail.
+
+**Coach (one tap):**
+1. Email (+ text if opted in): "Taylor Brooks (2028 PG) asked about your program — answer in one tap · $10".
+2. Tap a button: Invite to camp · I'll be at an event · Send more film · Keep me updated · Better fit elsewhere · Write a reply. Saved camps and events fill in automatically.
+3. They can also just reply to the email ("CAMP", "LEVEL D2", or plain words). "PASS" or "Not the right person" hands it to the next coach on staff.
+
+**Routing:** recruiting coordinator → assistants → head coach. No answer in 48 hours (Admin → Settings) → next coach, and the parent gets a text about it. The first answer wins, and only that school is charged. If nobody answers by the deadline, the hold is released and the parent pays $0.
+
+**Money per $20 answer:** coach $10 (Admin → Settings → "Coach share"), you $10 minus Stripe's fee (~$0.88). If nobody answers, Stripe charges no fee because the hold is simply released.

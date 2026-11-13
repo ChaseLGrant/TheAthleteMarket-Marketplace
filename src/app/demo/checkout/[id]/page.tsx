@@ -3,6 +3,7 @@ import { getDemo } from "@/lib/deps";
 import { isDemoMode } from "@/lib/env";
 import { money } from "@/lib/format";
 import { handleCheckoutPaid } from "@/lib/services/lifecycle";
+import { handleAskSetupCompleted } from "@/lib/services/line";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,8 @@ export default async function DemoCheckout({ params }: { params: Promise<{ id: s
   if (!isDemoMode()) notFound();
   const { id } = await params;
   const demo = await getDemo();
+  const setup = demo.payments.setupSessions.get(id);
+  if (setup) return <SetupCheckout id={id} s={setup} />;
   const s = demo.payments.sessions.get(id);
   if (!s) notFound();
 
@@ -33,6 +36,32 @@ export default async function DemoCheckout({ params }: { params: Promise<{ id: s
         <p className="mt-1 text-sm text-muted">{s.customerEmail}</p>
         <div className="mt-5 rounded-xl border border-line p-3 font-mono text-sm text-muted">4242 4242 4242 4242 · 12/34 · 123</div>
         <form action={pay} className="mt-5"><button className="btn-primary w-full">Authorize {money(s.amountCents)}</button></form>
+        <a href={s.cancelUrl.replace(/^https?:\/\/[^/]+/, "")} className="mt-3 block text-center text-sm text-muted underline">Cancel</a>
+      </div>
+    </main>
+  );
+}
+
+/** Coach Line: card is saved (no charge now); one hold per school is placed right after. */
+function SetupCheckout({ id, s }: { id: string; s: { email: string; description: string; successUrl: string; cancelUrl: string } }) {
+  async function save() {
+    "use server";
+    const d = await getDemo();
+    const sess = d.payments.setupSessions.get(id)!;
+    sess.completed = true;
+    await handleAskSetupCompleted(d, id);
+    redirect(sess.successUrl.replace(/^https?:\/\/[^/]+/, ""));
+  }
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-surface p-4">
+      <div className="card w-full max-w-md p-6">
+        <p className="pill bg-warn-50 text-warn">Simulated Stripe Checkout</p>
+        <h1 className="mt-4 text-lg font-semibold">Save card for Coach Line</h1>
+        <p className="mt-1 text-sm text-muted">{s.description}</p>
+        <p className="mt-4 text-sm font-medium">You won&apos;t be charged now. Each school is charged only when a coach there answers.</p>
+        <p className="mt-1 text-sm text-muted">{s.email}</p>
+        <div className="mt-5 rounded-xl border border-line p-3 font-mono text-sm text-muted">4242 4242 4242 4242 · 12/34 · 123</div>
+        <form action={save} className="mt-5"><button className="btn-primary w-full">Save card &amp; send</button></form>
         <a href={s.cancelUrl.replace(/^https?:\/\/[^/]+/, "")} className="mt-3 block text-center text-sm text-muted underline">Cancel</a>
       </div>
     </main>

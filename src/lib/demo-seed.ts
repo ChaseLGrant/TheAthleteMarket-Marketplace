@@ -78,6 +78,11 @@ export const DEMO_COACHES: Seed[] = [
   { slug: "demo-directory-3", email: "marcus.webb@example.edu", full_name: "Marcus Webb", title: "Recruiting Coordinator", school: "Gulf Coast Demo CC", sport: "Football", division: "NJCAA", conference: "Gulf Demo", state: "TX", coach_kind: "active_college", is_demo: true },
   { slug: "demo-directory-4", email: "hannah.brooks@example.edu", full_name: "Hannah Brooks", title: "Head Coach", school: "Cedar Ridge Demo University", sport: "Softball", division: "NCAA D2", conference: "Peach Demo", state: "GA", coach_kind: "active_college", is_demo: true },
   { slug: "demo-directory-5", email: "luis.moreno@example.edu", full_name: "Luis Moreno", title: "Assistant Coach", school: "Riverbend Demo College", sport: "Baseball", division: "NAIA", conference: "Heartland Demo", state: "KS", coach_kind: "active_college", is_demo: true },
+  // A full college staff — shows Coach Line routing (recruiting coordinator → assistant → head coach).
+  { slug: "demo-lakeview-rc", email: "dana.cole@example.edu", phone: "+15550100001", sms_opt_in_at: "2026-11-01T00:00:00Z", full_name: "Dana Cole", title: "Recruiting Coordinator", school: "Lakeview Demo University", sport: "Basketball (M)", division: "NCAA D1", conference: "Lakes Demo", state: "OH", coach_kind: "active_college", is_demo: true,
+    camps: [{ name: "Lakeview Elite Guard Camp", dates: "June 14–15", location: "Lakeview Arena", url: "https://example.com/camp" }], events: [{ name: "Summer Showcase", dates: "July 8–10", location: "Atlanta, GA" }] },
+  { slug: "demo-lakeview-asst", email: "eli.grant@example.edu", full_name: "Eli Grant", title: "Assistant Coach", school: "Lakeview Demo University", sport: "Basketball (M)", division: "NCAA D1", conference: "Lakes Demo", state: "OH", coach_kind: "active_college", is_demo: true },
+  { slug: "demo-lakeview-head", email: "pat.morgan@example.edu", full_name: "Pat Morgan", title: "Head Coach", school: "Lakeview Demo University", sport: "Basketball (M)", division: "NCAA D1", conference: "Lakes Demo", state: "OH", coach_kind: "active_college", is_demo: true },
 ];
 
 export async function seedDemo(store: MemoryStore) {

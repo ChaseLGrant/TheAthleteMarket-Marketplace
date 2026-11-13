@@ -32,6 +32,9 @@ Being explicit so nothing is assumed to work that hasn't been run against the re
 | Twilio texts | Needs your Twilio keys | Smoke test §9.9 |
 | Postmark inbound (coach email replies) | Needs Postmark + the MX record | Deployment §3a-2 step 5: reply to a real test request from your own inbox |
 | Reply parsing across mail apps | Tested with Gmail/Apple/Outlook-style quoting in unit tests, not live clients | Reply from iPhone Mail, Gmail app, Outlook — check the family email reads cleanly |
+| Coach Line saved card + per-school off-session holds (Stripe setup mode) | Needs Stripe keys | Test mode: message 2 schools with card 4242…, answer one from the coach link → that one is Captured, the other is released after the deadline |
+| Coach Line addresses (`school--sport@reply…`, `coach.slug@reply…`) | Needs Postmark inbound with a catch-all on the reply domain | Email a school address from Gmail; you should get "Finish sending" (first time) or "Reply YES" (returning) |
+| Twilio inbound texts (parent texts back) | Needs the webhook in §3b step 6 | Text the Twilio number after receiving an answer; the coach should get the message by email |
 | Film-link check against live YouTube/Vimeo/Drive | This sandbox can't reach those sites; tested with simulated responses | Paste a private YouTube link in the form; it should be flagged before checkout |
 
 ## Known limitations / next steps

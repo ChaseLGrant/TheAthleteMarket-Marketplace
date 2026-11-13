@@ -96,8 +96,11 @@ export default async function CoachPage({ params, searchParams }: P) {
                 <li>📬 Reply straight to your inbox within {settings.deadline_days} days</li>
                 <li>💳 Charged only if {first} replies</li>
               </ul>
-              <Link href={`/coaches/${coach.slug}/request${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-primary mt-5 w-full">
-                Request {first}
+              <Link href={`/ask?coach=${encodeURIComponent(coach.slug)}`} className="btn-primary mt-5 w-full">
+                Message {first} on Coach Line
+              </Link>
+              <Link href={`/coaches/${coach.slug}/request${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-ghost mt-2 w-full">
+                Get a film evaluation
               </Link>
               <p className="mt-3 text-center text-xs text-subtle">Feedback only — not a recruiting offer.</p>
             </div>

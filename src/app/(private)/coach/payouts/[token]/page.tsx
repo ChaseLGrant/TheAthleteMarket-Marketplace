@@ -10,6 +10,7 @@ import { resolvePayoutsLink } from "@/lib/services/access";
 import { setPaused } from "@/lib/services/experience";
 import { deliveryBadge } from "@/lib/services/coach-stats";
 import { coachReviewUrl } from "@/lib/services/links";
+import { answerUrl, coachLineAddress } from "@/lib/services/line";
 import { retryPayoutsForCoach, startOnboarding, syncAccount } from "@/lib/services/lifecycle";
 import { getDeps } from "@/lib/server";
 
@@ -78,6 +79,25 @@ export default async function CoachHub({ params, searchParams }: P) {
     redirect(`${self}?sms=on`);
   }
 
+  async function saveItem(fd: FormData) {
+    "use server";
+    const d = await getDeps();
+    const c = await resolvePayoutsLink(d, token);
+    if (!c) return;
+    const which = fd.get("which") === "event" ? "events" : "camps";
+    const list = [...(c[which] ?? [])];
+    if (fd.get("op") === "remove") list.splice(Number(fd.get("i")), 1);
+    else {
+      const name = String(fd.get("name") ?? "").trim().slice(0, 120), dates = String(fd.get("dates") ?? "").trim().slice(0, 80);
+      const location = String(fd.get("location") ?? "").trim().slice(0, 120) || undefined;
+      const url = String(fd.get("url") ?? "").trim().slice(0, 500);
+      if (name.length < 2 || dates.length < 2) redirect(`${self}?item=invalid#camps`);
+      list.push({ name, dates, location, ...(which === "camps" && /^https:\/\//.test(url) ? { url } : {}) });
+    }
+    await d.store.updateCoach(c.id, { [which]: list.slice(-6) });
+    revalidatePath(self);
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -108,7 +128,7 @@ export default async function CoachHub({ params, searchParams }: P) {
                   <p className="truncate font-medium">{r.athlete_name} · {r.position} · {r.grad_year}</p>
                   <p className="text-xs text-muted">{money(r.coach_payout_cents)} · respond by {dateOnly(r.expires_at)}{r.film_issue_at ? " · waiting on new film link" : ""}</p>
                 </div>
-                <Link href={coachReviewUrl(r).replace(/^https?:\/\/[^/]+/, "")} className="btn-primary btn-sm shrink-0">Record →</Link>
+                <Link href={(r.format === "ask" ? answerUrl(r, coach) : coachReviewUrl(r)).replace(/^https?:\/\/[^/]+/, "")} className="btn-primary btn-sm shrink-0">{r.format === "ask" ? "Answer →" : "Reply →"}</Link>
               </li>
             ))}
           </ul>
@@ -124,6 +144,41 @@ export default async function CoachHub({ params, searchParams }: P) {
           <p className="text-sm text-muted">{coach.paused ? "Families see that you're taking a short break." : "Busy week? Pause anytime. Open requests aren't affected."}</p>
         </div>
         <form action={togglePause}><button className={coach.paused ? "btn-primary btn-sm" : "btn-ghost btn-sm"}>{coach.paused ? "Resume" : "Pause"}</button></form>
+      </section>
+
+      {/* Coach Line: saved camps & events → one-tap answers */}
+      <section id="camps" className="card space-y-4 p-5">
+        <div>
+          <h2 className="font-semibold">Your camps &amp; events</h2>
+          <p className="text-sm text-muted">Save them once. When a family asks, answering is one tap — and every answer pays you.</p>
+          <p className="mt-1 break-all text-xs text-muted">Your Coach Line address: <strong className="text-navy">{coachLineAddress(coach)}</strong></p>
+        </div>
+        {(["camp", "event"] as const).map((w) => {
+          const items = (w === "camp" ? coach.camps : coach.events) ?? [];
+          return (
+            <div key={w} className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-subtle">{w === "camp" ? "Camps" : "Events you'll attend"}</p>
+              {items.map((it, i) => (
+                <form key={i} action={saveItem} className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
+                  <input type="hidden" name="which" value={w} /><input type="hidden" name="op" value="remove" /><input type="hidden" name="i" value={i} />
+                  <span className="min-w-0"><span className="block truncate font-medium">{it.name}</span><span className="block text-xs text-muted">{[it.dates, it.location].filter(Boolean).join(" · ")}</span></span>
+                  <button className="btn-ghost btn-sm shrink-0">Remove</button>
+                </form>
+              ))}
+              <details className="rounded-xl bg-surface p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-blue">+ Add {w === "camp" ? "a camp" : "an event"}</summary>
+                <form action={saveItem} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <input type="hidden" name="which" value={w} />
+                  <input name="name" placeholder={w === "camp" ? "Camp name" : "Event name"} className="field" aria-label="Name" />
+                  <input name="dates" placeholder="Dates, e.g. June 14–15" className="field" aria-label="Dates" />
+                  <input name="location" placeholder="Location (optional)" className="field" aria-label="Location" />
+                  {w === "camp" && <input name="url" placeholder="https:// sign-up link (optional)" className="field" aria-label="Sign-up link" />}
+                  <button className="btn-primary btn-sm sm:col-span-2">Save</button>
+                </form>
+              </details>
+            </div>
+          );
+        })}
       </section>
 
       {/* Payouts */}
