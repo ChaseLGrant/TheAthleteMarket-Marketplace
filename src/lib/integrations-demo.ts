@@ -39,7 +39,8 @@ export class FakePayments implements Payments {
   authorize(pi: string) { if (!this.intents.has(pi)) this.intents.set(pi, "requires_capture"); }
   private fee(pi: string) {
     const s = [...this.sessions.values()].find((x) => `pi_demo_${x.requestId}` === pi);
-    return s ? estimateStripeFee(s.amountCents) : 146;
+    const amt = s?.amountCents ?? this.holdAmounts.get(pi);
+    return amt ? estimateStripeFee(amt) : 146;
   }
   async getPaymentDetails(pi: string): Promise<PaymentDetails> {
     const status = this.intents.get(pi) ?? "requires_payment_method";
@@ -114,6 +115,33 @@ export class FakePayments implements Payments {
     if (a) Object.assign(a, { payoutsEnabled: true, transfersActive: true, detailsSubmitted: true });
   }
   constructEvent(): Stripe.Event { throw new Error("Webhooks are simulated directly in demo mode"); }
+
+  setupSessions = new Map<string, { orderId: string; url: string; customerId: string; email: string; successUrl: string; cancelUrl: string; description: string; completed: boolean }>();
+  failHold = false;
+  async createSetupCheckout(a: { orderId: string; ref: string; customerEmail: string; customerName: string; description: string; successUrl: string; cancelUrl: string }) {
+    return this.once(`setup-checkout-${a.orderId}`, () => {
+      const id = `cs_setup_demo_${a.orderId.slice(0, 8)}`;
+      const customerId = `cus_demo_${a.orderId.slice(0, 8)}`;
+      const url = `/demo/checkout/${id}`;
+      this.setupSessions.set(id, { orderId: a.orderId, url, customerId, email: a.customerEmail, successUrl: a.successUrl, cancelUrl: a.cancelUrl, description: a.description, completed: false });
+      return { id, url, customerId };
+    });
+  }
+  async getSetupDetails(sessionId: string) {
+    const s = this.setupSessions.get(sessionId);
+    if (!s?.completed) throw new Error("Setup session not completed");
+    return { customerId: s.customerId, paymentMethodId: `pm_demo_${s.customerId.slice(9)}` };
+  }
+  async holdOffSession(a: { requestId: string; amountCents: number }) {
+    if (this.failHold) throw new Error("Simulated card decline");
+    return this.once(`hold-${a.requestId}`, () => {
+      const pi = `pi_demo_${a.requestId}`;
+      this.intents.set(pi, "requires_capture");
+      this.holdAmounts.set(pi, a.amountCents);
+      return { paymentIntentId: pi, status: "requires_capture", chargeId: `ch_demo_${a.requestId.slice(0, 12)}`, captureBefore: null };
+    });
+  }
+  holdAmounts = new Map<string, number>();
 }
 
 export class FakeMailer implements Mailer {

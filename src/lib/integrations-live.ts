@@ -185,6 +185,62 @@ export class StripePayments implements Payments {
     };
   }
 
+  async createSetupCheckout(a: { orderId: string; ref: string; customerEmail: string; customerName: string; description: string; successUrl: string; cancelUrl: string }) {
+    const customer = await stripe().customers.create(
+      { email: a.customerEmail, name: a.customerName, metadata: { order_id: a.orderId } },
+      { idempotencyKey: `customer-${a.orderId}` },
+    );
+    const s = await stripe().checkout.sessions.create(
+      {
+        mode: "setup",
+        customer: customer.id,
+        currency: "usd",
+        client_reference_id: a.orderId,
+        metadata: { order_id: a.orderId, ref: a.ref, kind: "coach_line" },
+        setup_intent_data: { description: a.description, metadata: { order_id: a.orderId } },
+        custom_text: {
+          submit: { message: "You're not charged now. We place a hold per school and charge it only when a coach from that school answers." },
+        },
+        success_url: a.successUrl,
+        cancel_url: a.cancelUrl,
+      },
+      { idempotencyKey: `setup-checkout-${a.orderId}` },
+    );
+    if (!s.url) throw new Error("Stripe did not return a Checkout URL");
+    return { id: s.id, url: s.url, customerId: customer.id };
+  }
+
+  async getSetupDetails(sessionId: string) {
+    const s = await stripe().checkout.sessions.retrieve(sessionId, { expand: ["setup_intent"] });
+    const si = s.setup_intent as Stripe.SetupIntent | null;
+    const pm = typeof si?.payment_method === "string" ? si.payment_method : si?.payment_method?.id;
+    const customer = typeof s.customer === "string" ? s.customer : s.customer?.id;
+    if (!pm || !customer) throw new Error("Setup session has no payment method yet");
+    return { customerId: customer, paymentMethodId: pm };
+  }
+
+  async holdOffSession(a: { requestId: string; amountCents: number; customerId: string; paymentMethodId: string; description: string }) {
+    const pi = await stripe().paymentIntents.create(
+      {
+        amount: a.amountCents,
+        currency: "usd",
+        customer: a.customerId,
+        payment_method: a.paymentMethodId,
+        capture_method: "manual",
+        confirm: true,
+        off_session: true,
+        description: a.description,
+        transfer_group: `req_${a.requestId}`,
+        metadata: { request_id: a.requestId },
+        expand: ["latest_charge"],
+      },
+      { idempotencyKey: `hold-${a.requestId}` },
+    );
+    const charge = pi.latest_charge as Stripe.Charge | null;
+    const cb = charge?.payment_method_details?.card?.capture_before;
+    return { paymentIntentId: pi.id, status: pi.status, chargeId: charge?.id ?? null, captureBefore: cb ? new Date(cb * 1000) : null };
+  }
+
   constructEvent(rawBody: string, signature: string) {
     const secrets = env.stripeWebhookSecrets();
     if (!secrets.length) throw new Error("No Stripe webhook secret configured");

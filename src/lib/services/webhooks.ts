@@ -31,6 +31,11 @@ async function dispatch(deps: Deps, evt: Stripe.Event) {
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded": {
       const s = evt.data.object;
+      if (s.mode === "setup") {
+        const { handleAskSetupCompleted } = await import("./line");
+        await handleAskSetupCompleted(deps, s.id);
+        return;
+      }
       await handleCheckoutPaid(deps, {
         id: s.id,
         payment_status: s.payment_status,

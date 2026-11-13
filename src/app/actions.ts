@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { addCoachSchema, applicationSchema, fieldErrors, requestSchema } from "@/lib/validation";
+import { addCoachSchema, applicationSchema, askSchema, fieldErrors, requestSchema } from "@/lib/validation";
 import { createRequestAndCheckout, UserFacingError } from "@/lib/services/lifecycle";
 import { checkFilmLink, sendPayoutInvite } from "@/lib/services/experience";
 import { alertAdmin } from "@/lib/services/notify";
@@ -114,4 +114,32 @@ export async function addCoachAndRequest(_prev: FormState, fd: FormData): Promis
     });
   }
   redirect(`/coaches/${slug}/request`);
+}
+
+/** Coach Line: send a message to 1–5 schools. One checkout (card saved), one hold per school. */
+export async function submitAsk(_prev: FormState, fd: FormData): Promise<FormState> {
+  const values = formValues(fd);
+  const parsed = askSchema.safeParse(values);
+  if (!parsed.success) return { error: "Please fix the highlighted fields.", fields: fieldErrors(parsed.error), values };
+  const v = parsed.data;
+  const film = await checkFilmLink(v.filmUrl);
+  if (film.status === "private" || film.status === "not_found")
+    return { error: "Coaches won't be able to open your film link.", fields: { filmUrl: film.message ?? "Check your film link." }, values };
+  let url: string;
+  try {
+    const deps = await getDeps();
+    const { createAskOrder, resolveDraftToken } = await import("@/lib/services/line");
+    const draft = v.draftToken ? await resolveDraftToken(deps, v.draftToken) : null;
+    ({ url } = await createAskOrder(deps, {
+      targets: v.targets, message: v.message, athleteName: v.athleteName, gradYear: v.gradYear, position: v.position, sport: v.sport,
+      filmUrl: v.filmUrl, purchaserName: v.purchaserName, purchaserEmail: v.purchaserEmail, purchaserPhone: v.purchaserPhone,
+      parentSmsConsent: v.parentSmsConsent === "on", athleteIsMinor: v.athleteIsMinor === "yes",
+      relationship: v.athleteIsMinor === "yes" ? "parent_guardian" : "athlete_adult", draftId: draft?.id ?? null,
+    }, { ip: await clientIp() }));
+  } catch (e) {
+    if (e instanceof UserFacingError) return { error: e.message, values };
+    log("error", "ask checkout failed", { error: String(e) });
+    return { error: "We couldn't start checkout. Please try again in a moment.", values };
+  }
+  redirect(url);
 }

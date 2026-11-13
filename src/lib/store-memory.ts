@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Coach, DisputeRow, EmailLogRow, EvalRequest, RequestEvent, Settings } from "./types";
+import type { AskDraft, Coach, DisputeRow, EmailLogRow, EvalRequest, Order, RequestEvent, SavedPayer, Settings, ThreadMessage } from "./types";
 import { DEFAULT_SETTINGS, type NewRequest, type RequestFilter, type RequestWhere, type Store } from "./store";
 
 const clone = <T>(v: T): T => structuredClone(v);
@@ -78,7 +78,8 @@ export class MemoryStore implements Store {
       phone: null, sms_opt_in_at: null, sms_opted_out: false, paused: false, intro_video_path: null, delivered_count: 0,
       delivery_hours_total: 0, rating_sum: 0, rating_count: 0, payout_invite_sent_at: null, last_summary_at: null,
       email_confirmed_at: null, source: "import", unlisted: false, removed: false, stripe_legal_name: null,
-      name_match_override: false, requests_received: 0,
+      name_match_override: false, requests_received: 0, email_status: "ok", camps: [], events: [], answers_count: 0,
+      answer_hours_total: 0, line_slug: null,
       created_at: nowIso(), updated_at: nowIso(), ...c,
     };
     this.coaches.set(row.id, row);
@@ -107,6 +108,7 @@ export class MemoryStore implements Store {
       purged_at: null, video_deleted_at: null, takeaway_strength: null, takeaway_improve: null, takeaway_next: null,
       rating: null, would_buy_again: null, rating_comment: null, rated_at: null, film_issue_at: null, film_issue_note: null,
       level_read: null, response_text: null, response_kind: null, response_link: null, response_from: null,
+      escalated_at: null, answer_kind: null, answer_payload: null, parent_notified_open_at: null, escalation_index: 0,
       video_path: null, video_mime: null, video_size_bytes: null, video_duration_seconds: null,
     };
     this.requests.set(row.id, row);
@@ -135,6 +137,7 @@ export class MemoryStore implements Store {
     if (f.payout_status) list = list.filter((r) => f.payout_status!.includes(r.payout_status));
     if (f.refund_status) list = list.filter((r) => f.refund_status!.includes(r.refund_status));
     if (f.coach_id) list = list.filter((r) => r.coach_id === f.coach_id);
+    if (f.order_id) list = list.filter((r) => r.order_id === f.order_id);
     if (f.expiresBefore) list = list.filter((r) => r.expires_at && r.expires_at < f.expiresBefore!);
     if (f.completedBefore) list = list.filter((r) => r.completed_at && r.completed_at < f.completedBefore!);
     if (f.purchaser_email) list = list.filter((r) => r.purchaser_email.toLowerCase() === f.purchaser_email!.toLowerCase());
@@ -211,6 +214,46 @@ export class MemoryStore implements Store {
     this.spend.unshift({ ...r, id: this.seq++ });
   }
 
+  orders = new Map<string, Order>();
+  thread: ThreadMessage[] = [];
+  drafts = new Map<string, AskDraft>();
+  payers = new Map<string, SavedPayer>();
+  async insertOrder(o: Omit<Order, "id" | "created_at" | "status" | "stripe_customer_id" | "stripe_payment_method_id">) {
+    const row: Order = { ...o, id: randomUUID(), status: "awaiting_payment", stripe_customer_id: null, stripe_payment_method_id: null, created_at: nowIso() };
+    this.orders.set(row.id, row);
+    return clone(row);
+  }
+  async getOrder(id: string) { return clone(this.orders.get(id) ?? null); }
+  async getOrderBySession(sid: string) { return clone([...this.orders.values()].find((o) => o.stripe_checkout_session_id === sid) ?? null); }
+  async updateOrder(id: string, patch: Partial<Order>) { const o = this.orders.get(id)!; Object.assign(o, patch); return clone(o); }
+  async addThreadMessage(m: Omit<ThreadMessage, "id" | "created_at">) { this.thread.push({ ...m, id: this.seq++, created_at: nowIso() }); }
+  async listThread(requestId: string) { return clone(this.thread.filter((t) => t.request_id === requestId)); }
+  async listStaff(school: string, sport: string) {
+    const s = school.trim().toLowerCase();
+    return clone([...this.coaches.values()].filter((c) => (c.school ?? "").trim().toLowerCase() === s && c.sport === sport));
+  }
+  async suggestSchools(q: string, limit: number) {
+    const t = q.trim().toLowerCase();
+    const groups = new Map<string, { school: string; sport: string; staff: number }>();
+    for (const c of this.coaches.values()) {
+      if (!c.school || c.removed || !c.email) continue;
+      if (t && !`${c.school} ${c.sport} ${c.full_name}`.toLowerCase().includes(t)) continue;
+      const k = `${c.school}|${c.sport}`;
+      const g = groups.get(k) ?? { school: c.school, sport: c.sport, staff: 0 };
+      g.staff++;
+      groups.set(k, g);
+    }
+    return [...groups.values()].sort((a, b) => b.staff - a.staff || a.school.localeCompare(b.school)).slice(0, limit);
+  }
+  async insertDraft(d: Omit<AskDraft, "id" | "created_at" | "status" | "request_id">) {
+    const row: AskDraft = { ...d, id: randomUUID(), status: "pending", request_id: null, created_at: nowIso() };
+    this.drafts.set(row.id, row);
+    return clone(row);
+  }
+  async getDraft(id: string) { return clone(this.drafts.get(id) ?? null); }
+  async updateDraft(id: string, patch: Partial<AskDraft>) { const d = this.drafts.get(id); if (!d) return null; Object.assign(d, patch); return clone(d); }
+  async getSavedPayer(email: string) { return clone(this.payers.get(email.toLowerCase()) ?? null); }
+  async upsertSavedPayer(p: Omit<SavedPayer, "updated_at">) { this.payers.set(p.email.toLowerCase(), { ...p, email: p.email.toLowerCase(), updated_at: nowIso() }); }
   inbound = new Map<string, { request_id: string | null; from_email: string | null; outcome: string }>();
   async claimInbound(id: string, requestId: string | null, fromEmail: string | null) {
     const prev = this.inbound.get(id);

@@ -10,6 +10,7 @@ import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequ
 import { sendWeeklySummaries } from "./experience";
 import { coachDigest, sms as smsText } from "../email/templates";
 import { mailtoReply, replyAddress, replyTemplate } from "./email-native";
+import { answerUrl, escalateAsks, sendAskInvite } from "./line";
 import type { EvalRequest } from "../types";
 
 const HOUR = 3_600_000;
@@ -25,7 +26,7 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
   const outOfTime = () => Date.now() - startedAt > (opts.budgetMs ?? 50_000);
   const nowIso = now.toISOString();
   const settings = await deps.store.getSettings();
-  const out = { partial: false, notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
+  const out = { partial: false, escalated: 0, notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try { await fn(); } catch (e) { out.errors++; log("error", `cron:${label}`, { error: String(e) }); }
   };
@@ -84,13 +85,19 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
     });
   }
 
+  // 4c. Coach Line: escalate unanswered messages to the next person on that school's staff.
+  await safe("escalate", async () => { out.escalated = await escalateAsks(deps); });
+
   // 5. Follow-ups until the coach responds — grouped per coach (one email + one text per coach per run).
   //    stage 1: ~1 day after first contact if unopened · stage 2: ~3 days left · stage 3: final day.
   const due = new Map<string, { r: EvalRequest; stage: number }[]>();
   for (const r of await deps.store.listRequests({ status: ["coach_notified", "accepted"], limit: 10000 })) {
     if (!r.expires_at) continue;
     const hoursLeft = (Date.parse(r.expires_at) - now.getTime()) / HOUR;
-    const hoursSinceNotify = r.coach_notified_at ? (now.getTime() - Date.parse(r.coach_notified_at)) / HOUR : 0;
+    // Measured from when the CURRENT coach was contacted (escalation restarts the clock).
+    const contactedAt = r.escalated_at ?? r.coach_notified_at;
+    const hoursSinceNotify = contactedAt ? (now.getTime() - Date.parse(contactedAt)) / HOUR : 0;
+    if (hoursSinceNotify < 20) continue; // never remind someone we just contacted (e.g. right after an escalation)
     const stages = [
       () => hoursSinceNotify >= 20 && !r.coach_viewed_at && hoursLeft > 60,
       () => hoursLeft <= 72 && hoursLeft > 30,
@@ -118,7 +125,11 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
       const all = [...claimed.map((c) => c.r), ...others].sort((a, b) => a.expires_at!.localeCompare(b.expires_at!));
       const finalDay = claimed.some((c) => c.stage === 2);
       const key = `coach-followup-${coachId}-${claimed.map((c) => `${c.r.id.slice(0, 8)}${c.stage}`).sort().join("")}`.slice(0, 200);
-      if (all.length === 1) {
+      if (all.length === 1 && all[0]!.format === "ask") {
+        const r = all[0]!;
+        const hoursLeft = (Date.parse(r.expires_at!) - now.getTime()) / HOUR;
+        await sendAskInvite(deps, r, coach, { reminder: { daysLeft: Math.max(1, Math.round(hoursLeft / 24)), nudge: claimed[0]!.stage === 0 }, key });
+      } else if (all.length === 1) {
         const r = all[0]!;
         const hoursLeft = (Date.parse(r.expires_at!) - now.getTime()) / HOUR;
         await sendEmail(deps, {
@@ -136,7 +147,7 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
         await sendEmail(deps, {
           to: coach.email!,
           rendered: coachDigest({
-            coach, items: all.map((r) => ({ req: r, url: coachReviewUrl(r), replyUrl: mailtoReply(r) })), hubUrl: hubUrl(coach),
+            coach, items: all.map((r) => (r.format === "ask" ? { req: r, url: answerUrl(r, coach), replyUrl: answerUrl(r, coach) } : { req: r, url: coachReviewUrl(r), replyUrl: mailtoReply(r) })), hubUrl: hubUrl(coach),
             unsubscribeUrl: unsubscribeUrl(coach.email!), postalAddress: env.postalAddress(), finalDay,
           }),
           template: "coach_digest", idempotencyKey: key, coachId: coach.id, marketing: true,

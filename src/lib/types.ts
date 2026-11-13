@@ -1,5 +1,24 @@
-export type EvalFormat = "written" | "voice" | "video";
-export const FORMAT_LABEL: Record<EvalFormat, string> = { written: "Written take", voice: "Voice note", video: "Video breakdown" };
+export type EvalFormat = "written" | "voice" | "video" | "ask";
+export const FORMAT_LABEL: Record<EvalFormat, string> = { written: "Written take", voice: "Voice note", video: "Video breakdown", ask: "Coach Line message" };
+
+export type AnswerKind = "camp" | "event" | "film" | "update" | "level" | "personal";
+export interface CampItem { name: string; dates: string; location?: string; url?: string }
+export interface EventItem { name: string; dates: string; location?: string }
+export interface ThreadMessage { id: number; request_id: string; direction: "parent_to_coach" | "coach_to_parent"; channel: "email" | "sms" | "web"; body: string; created_at: string }
+export interface AskDraft {
+  id: string; from_email: string; target_school: string | null; target_sport: string | null; coach_id: string | null;
+  subject: string | null; message: string; film_url: string | null; status: "pending" | "sent" | "expired";
+  request_id: string | null; created_at: string;
+}
+export interface SavedPayer {
+  email: string; stripe_customer_id: string; stripe_payment_method_id: string; name: string | null; phone: string | null;
+  athlete_name: string | null; athlete_grad_year: number | null; athlete_position: string | null; athlete_sport: string | null; updated_at: string;
+}
+export interface Order {
+  id: string; ref: string; stripe_checkout_session_id: string | null; stripe_customer_id: string | null;
+  stripe_payment_method_id: string | null; purchaser_email: string; total_cents: number; school_count: number;
+  status: "awaiting_payment" | "authorized" | "cancelled"; created_at: string;
+}
 
 export type ListingType = "directory" | "participating";
 export type CoachKind = "active_college" | "former_college" | "independent" | "pro_player";
@@ -30,7 +49,11 @@ export interface Settings {
   allow_active_college_coaches: boolean;
   retention_days: number;
   video_retention_days: number;
-  format_prices: Record<EvalFormat, number>;
+  format_prices: Record<"written" | "voice" | "video", number>;
+  /** Coach Line: price for asking 1 / 3 / 5 schools. */
+  ask_prices: Record<string, number>;
+  ask_coach_share_bps: number;
+  escalate_after_hours: number;
   show_directory_listings: boolean;
   require_payouts_before_booking: boolean;
 }
@@ -85,6 +108,11 @@ export interface Coach {
   name_match_override: boolean;
   requests_received: number;
   email_status?: "ok" | "bounced" | "complained";
+  camps: CampItem[];
+  events: EventItem[];
+  answers_count: number;
+  answer_hours_total: number;
+  line_slug: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -168,6 +196,15 @@ export interface EvalRequest {
   response_from: string | null;
   purchaser_phone: string | null;
   purchaser_sms_opt_in_at: string | null;
+  target_school: string | null;
+  target_sport: string | null;
+  escalation_ids: string[];
+  escalation_index: number;
+  escalated_at: string | null;
+  answer_kind: AnswerKind | null;
+  answer_payload: Record<string, unknown> | null;
+  order_id: string | null;
+  parent_notified_open_at: string | null;
   video_path: string | null;
   video_mime: string | null;
   video_size_bytes: number | null;

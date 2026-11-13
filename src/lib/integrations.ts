@@ -36,6 +36,11 @@ export interface Payments {
   createDashboardLink(accountId: string): Promise<{ url: string }>;
   getAccountStatus(accountId: string): Promise<AccountStatus>;
   constructEvent(rawBody: string, signature: string): Stripe.Event;
+
+  // ---- Coach Line: save the card once, then one hold per school (charged only if that school answers)
+  createSetupCheckout(a: { orderId: string; ref: string; customerEmail: string; customerName: string; description: string; successUrl: string; cancelUrl: string }): Promise<{ id: string; url: string; customerId: string }>;
+  getSetupDetails(sessionId: string): Promise<{ customerId: string; paymentMethodId: string }>;
+  holdOffSession(a: { requestId: string; amountCents: number; customerId: string; paymentMethodId: string; description: string }): Promise<{ paymentIntentId: string; status: string; chargeId: string | null; captureBefore: Date | null }>;
 }
 
 export interface PaymentDetails {

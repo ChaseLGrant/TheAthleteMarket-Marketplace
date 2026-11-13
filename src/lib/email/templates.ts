@@ -164,11 +164,12 @@ const NO_PROMISE =
   "This is a paid feedback request only. You are not being asked to recruit, contact, offer, or promise anything to this athlete.";
 
 
-const FORMAT_WORD: Record<EvalRequest["format"], string> = { written: "written take", voice: "voice note", video: "video breakdown" };
+const FORMAT_WORD: Record<EvalRequest["format"], string> = { written: "written take", voice: "voice note", video: "video breakdown", ask: "message" };
 const HOW_TO: Record<EvalRequest["format"], string> = {
   written: "Just <strong>hit Reply</strong> and fill in the short template below — about 2 minutes. No account, no app.",
   voice: "<strong>Hit Reply and attach a 1–2 minute voice memo</strong> (iPhone: Voice Memos → ••• → Share → Mail). Add a line or two in the template if you like.",
   video: "<strong>Tap Record</strong> to film 30–60 seconds right in your browser — or hit Reply and attach a short video or a link.",
+  ask: "Answer in one tap below — or just hit Reply.",
 };
 
 function templateBlock(template: string) {
@@ -328,8 +329,11 @@ export function purchaserRefunded(a: {
   retryUrl?: string;
 }): Rendered {
   const { req, coach } = a;
-  const reason =
-    a.why === "declined"
+  const reason = req.format === "ask"
+    ? (a.why === "declined" || a.why === "expired"
+        ? `No one on the ${esc(req.target_school ?? coach.school ?? "")} staff answered in time.`
+        : `We couldn't reach the ${esc(req.target_school ?? coach.school ?? "")} staff.`)
+    : a.why === "declined"
       ? `${esc(coach.full_name)} wasn't able to take this request.`
       : a.why === "expired"
         ? `${esc(coach.full_name)} didn't record a video within the deadline.`
@@ -409,3 +413,177 @@ export function adminAlert(a: { title: string; lines: string[]; url?: string; po
   });
   return { subject: `[TAM alert] ${a.title}`, html, text: [a.title, ...a.lines, a.url ?? ""].join("\n") };
 }
+
+/* ═════════════════════════════ Coach Line ═════════════════════════════ */
+
+const ANSWER_BUTTONS: { kind: string; label: string; sub: string }[] = [
+  { kind: "camp", label: "🏕️ Invite to camp", sub: "Your saved camp dates are filled in" },
+  { kind: "event", label: "📍 We'll be at an event", sub: "Tournament / showcase you'll attend" },
+  { kind: "film", label: "🎥 Send more film", sub: "Ask for a full game or more clips" },
+  { kind: "update", label: "📅 Keep me updated", sub: "Check back after the season" },
+  { kind: "level", label: "↪️ Better fit at another level", sub: "Point them to D2 / D3 / NAIA / JUCO" },
+  { kind: "personal", label: "✍️ Write a personal reply", sub: "A sentence or two in your words" },
+];
+
+export function coachAskInvite(a: {
+  req: EvalRequest; coach: Coach; answerUrl: (kind?: string) => string; declineUrl: string; unsubscribeUrl: string; hubUrl: string;
+  postalAddress: string; earnCents: number; escalated?: boolean; reminder?: { daysLeft: number; nudge?: boolean };
+}): Rendered {
+  const { req, coach } = a;
+  const who = `${req.athlete_name} (${req.grad_year} ${req.position})`;
+  const earn = a.earnCents > 0 ? ` · ${money(a.earnCents)} for answering` : "";
+  const subject = a.reminder?.nudge
+    ? `${req.athlete_name} is still waiting on your answer${earn}`
+    : a.reminder
+    ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left to answer ${req.athlete_name}${earn}`
+    : `${who} asked about ${req.target_school ?? "your program"} — answer in one tap${earn}`;
+  const buttons = ANSWER_BUTTONS.map(
+    (b) => `<tr><td style="padding:0 0 8px;"><a href="${esc(a.answerUrl(b.kind))}" style="display:block;padding:12px 14px;border:1px solid #DCE6FF;border-radius:12px;background:#F6F9FF;text-decoration:none;color:${NAVY};"><span style="font-size:15px;font-weight:700;">${b.label}</span><br><span style="font-size:12.5px;color:${MUTED};">${b.sub}</span></a></td></tr>`,
+  ).join("");
+  const html = layout({
+    preheader: `“${(req.message ?? "").slice(0, 90)}…” — answer in one tap from your phone.`,
+    heading: a.escalated ? `${req.athlete_name} is hoping to hear from your staff` : `A recruit asked about your program`,
+    bodyHtml:
+      table([
+        row("Athlete", `${esc(req.athlete_name)} · ${esc(req.position)} · Class of ${esc(req.grad_year)}`),
+        row("Sport", esc(req.sport)),
+        row("Film", `<a href="${esc(req.film_url)}" style="color:${BLUE};">Watch film ↗</a>`),
+        ...(a.earnCents > 0 ? [row("You earn", `<span style="color:#0A7A3E;">${money(a.earnCents)} when you answer</span>`)] : []),
+        row("Answer by", esc(dateOnly(req.expires_at))),
+      ]) +
+      `<div style="margin:14px 0;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.message ?? "")}</div>` +
+      p(`<strong>Answer in one tap:</strong>`) +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${buttons}</table>` +
+      p(`<span style="font-size:13px;color:${MUTED};">On your phone? You can also just <strong>hit Reply</strong> and type <strong>CAMP</strong>, <strong>EVENT</strong>, <strong>FILM</strong>, <strong>UPDATE</strong>, <strong>LEVEL D2</strong> — or any message. Your email address is never shown to the family.</span>`) +
+      (!coach.camps?.length ? p(`<span style="font-size:13px;color:${MUTED};">Tip: <a href="${esc(a.hubUrl)}" style="color:${BLUE};">save your camp dates once</a> and every camp invite fills itself in.</span>`) : ""),
+    footerHtml: `Sent through The Athlete Market Coach Line. Not for you? <a href="${esc(a.declineUrl)}" style="color:${MUTED};">Pass on this one</a> · <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause messages</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
+    postalAddress: a.postalAddress,
+  });
+  const text = [subject, "", req.message ?? "", "", `Film: ${req.film_url}`, "",
+    ...ANSWER_BUTTONS.map((b) => `${b.label.replace(/^\S+\s/, "")}: ${a.answerUrl(b.kind)}`), "",
+    "Or hit Reply and type CAMP / EVENT / FILM / UPDATE / LEVEL D2 / any message.", `Pass: ${a.declineUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
+  return { subject, html, text };
+}
+
+/** The coach's answer as an HTML card (camp / event / film / update / level / personal). */
+export function answerCardHtml(req: EvalRequest, coach: Coach): string {
+  const pl = (req.answer_payload ?? {}) as Record<string, string>;
+  const note = pl.note ? `<p style="margin:10px 0 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(pl.note)}</p>` : "";
+  const box = (title: string, inner: string) =>
+    `<div style="margin:0 0 14px;padding:16px;border:1px solid #DCE6FF;border-radius:14px;background:#F6F9FF;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${BLUE};font-weight:700;">${title}</div>${inner}${note}</div>`;
+  switch (req.answer_kind) {
+    case "camp":
+      return box("Camp invitation", `<div style="font-size:19px;font-weight:700;margin-top:6px;color:${NAVY};">${esc(pl.name)}</div><div style="font-size:15px;color:${NAVY};margin-top:2px;">${esc(pl.dates)}${pl.location ? ` · ${esc(pl.location)}` : ""}</div>${pl.url ? `<a href="${esc(pl.url)}" style="display:inline-block;margin-top:12px;padding:11px 18px;background:${BLUE};color:#fff;border-radius:10px;font-weight:700;text-decoration:none;">Register for camp →</a>` : ""}`);
+    case "event":
+      return box(`${esc(coach.full_name.split(" ")[0])} will be at`, `<div style="font-size:19px;font-weight:700;margin-top:6px;color:${NAVY};">${esc(pl.name)}</div><div style="font-size:15px;color:${NAVY};margin-top:2px;">${esc(pl.dates)}${pl.location ? ` · ${esc(pl.location)}` : ""}</div>`);
+    case "film":
+      return box("More film requested", `<div style="font-size:16px;margin-top:6px;color:${NAVY};">The staff would like to see more — a full game or more clips. <strong>Reply to this email with the link</strong> and we'll pass it straight to them.</div>`);
+    case "update":
+      return box("Keep in touch", `<div style="font-size:16px;margin-top:6px;color:${NAVY};">Keep the staff updated${pl.when ? ` — ${esc(pl.when)}` : " after your season"}. Just reply to this email when you have new film or results.</div>`);
+    case "level":
+      return box("Honest level read", `<div style="font-size:19px;font-weight:700;margin-top:6px;color:${NAVY};">Better fit: ${esc(pl.level ?? "another level")}</div>`);
+    default:
+      return box(`Message from ${esc(coach.full_name)}`, "");
+  }
+}
+
+export function parentAnswer(a: {
+  req: EvalRequest; coach: Coach; postalAddress: string; askAnotherUrl?: string; replyHint: boolean;
+}): Rendered {
+  const { req, coach } = a;
+  const school = coach.school ?? req.target_school ?? "the program";
+  const subject = `${coach.full_name} (${school}) answered ${req.athlete_name.split(" ")[0]} 🎉`;
+  const html = layout({
+    preheader: `${coach.full_name} answered your message about ${req.athlete_name}.`,
+    heading: `${coach.full_name} answered`,
+    bodyHtml:
+      p(`<span style="color:${MUTED};">${esc([coach.title, school].filter(Boolean).join(" · "))}</span>`) +
+      answerCardHtml(req, coach) +
+      p(`<strong>Want to respond?</strong> Just reply to this email (or text us back if you got a text) — we'll pass it straight to ${esc(coach.full_name.split(" ")[0])}. Follow-ups are free.`) +
+      p(`<span style="font-size:13px;color:${MUTED};">Your email and phone stay private — every message goes through The Athlete Market.</span>`),
+    cta: a.askAnotherUrl ? { label: "Ask another school", url: a.askAnotherUrl } : undefined,
+    footerHtml: `Reference ${esc(req.ref)}. Ask any college coach at theathletemarket.com — answered or it's free.`,
+    postalAddress: a.postalAddress,
+  });
+  const pl = (req.answer_payload ?? {}) as Record<string, string>;
+  const text = [`${coach.full_name} (${school}) answered about ${req.athlete_name}.`, "",
+    req.answer_kind === "camp" ? `Camp: ${pl.name} — ${pl.dates}${pl.location ? `, ${pl.location}` : ""}${pl.url ? `\nRegister: ${pl.url}` : ""}` : "",
+    req.answer_kind === "event" ? `They'll be at: ${pl.name} — ${pl.dates}${pl.location ? `, ${pl.location}` : ""}` : "",
+    req.answer_kind === "film" ? "They'd like more film — reply with a link." : "",
+    req.answer_kind === "update" ? "Keep them updated — reply when you have new film or results." : "",
+    req.answer_kind === "level" ? `Better fit: ${pl.level}` : "",
+    pl.note ?? "", "", "Reply to this email to respond — we'll pass it on.", a.postalAddress].filter((l) => l !== "").join("\n");
+  return { subject, html, text };
+}
+
+/** A relayed follow-up message (parent ↔ coach), always from The Athlete Market. */
+export function relayMessage(a: { toRole: "coach" | "parent"; fromName: string; req: EvalRequest; body: string; postalAddress: string }): Rendered {
+  const subject = a.toRole === "coach"
+    ? `Re: ${a.req.athlete_name} — new message from the family`
+    : `Re: ${a.req.athlete_name} — new message from ${a.fromName}`;
+  const html = layout({
+    preheader: a.body.slice(0, 100),
+    heading: a.toRole === "coach" ? `${a.req.athlete_name}'s family replied` : `${a.fromName} replied`,
+    bodyHtml:
+      `<div style="margin:0 0 14px;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(a.body)}</div>` +
+      p(`<span style="font-size:13px;color:${MUTED};">Just hit Reply to answer. Email addresses stay private — The Athlete Market passes every message along.</span>`),
+    footerHtml: `Reference ${esc(a.req.ref)}.`,
+    postalAddress: a.postalAddress,
+  });
+  return { subject, html, text: `${a.body}\n\n— Hit Reply to answer. (${a.req.ref})\n${a.postalAddress}` };
+}
+
+export function orderReceipt(a: { email: string; name: string; athlete: string; schools: { school: string; price: number }[]; postalAddress: string }): Rendered {
+  const rows = a.schools.map((s) => row(esc(s.school), `${money(s.price)} <span style="font-weight:400;color:${MUTED};">hold</span>`));
+  const html = layout({
+    preheader: "Your message is on its way. You're only charged for schools that answer.",
+    heading: "Your message is on its way",
+    bodyHtml:
+      p(`We're delivering your message about <strong>${esc(a.athlete)}</strong> to ${a.schools.length === 1 ? "this coaching staff" : `these ${a.schools.length} coaching staffs`}:`) +
+      table(rows) +
+      p(`<strong>Answered — or it's free.</strong> Each school is charged only if a coach there answers. If the first coach doesn't, we automatically reach the next person on that staff. No answer in 5 days? That hold is released.`) +
+      p(`We'll text and email you the moment someone answers.`),
+    footerHtml: `Questions? Reply to this email.`,
+    postalAddress: a.postalAddress,
+  });
+  return { subject: `Sent! ${a.schools.length === 1 ? a.schools[0]!.school : `${a.schools.length} schools`} — we'll tell you when they answer`, html, text: `Your message about ${a.athlete} is on its way to ${a.schools.map((s) => s.school).join(", ")}. Only charged for schools that answer.\n${a.postalAddress}` };
+}
+
+/** Gmail railway — first-time sender: confirm + add a card once. */
+export function draftConfirmFirstTime(a: { school: string; priceCents: number; confirmUrl: string; postalAddress: string }): Rendered {
+  const html = layout({
+    preheader: `One tap to send your message to ${a.school}.`,
+    heading: `Got it — one tap to send to ${a.school}`,
+    bodyHtml:
+      p(`We received your message for the <strong>${esc(a.school)}</strong> coaching staff. Tap below to add your athlete's details and confirm — <strong>${money(a.priceCents)}, charged only if a coach answers</strong>.`) +
+      p(`<span style="font-size:13px;color:${MUTED};">Next time it's even easier: email any school and just reply YES.</span>`),
+    cta: { label: "Confirm & send", url: a.confirmUrl },
+    postalAddress: a.postalAddress,
+  });
+  return { subject: `Confirm: your message to ${a.school}`, html, text: `Confirm and send your message to ${a.school} (${money(a.priceCents)}, only if answered): ${a.confirmUrl}\n${a.postalAddress}` };
+}
+
+/** Gmail railway — returning sender: reply YES to send (card on file). */
+export function draftConfirmYes(a: { school: string; priceCents: number; athlete: string; postalAddress: string }): Rendered {
+  const html = layout({
+    preheader: `Reply YES to send to ${a.school}.`,
+    heading: `Reply YES to send`,
+    bodyHtml:
+      p(`Ready to send your message about <strong>${esc(a.athlete)}</strong> to the <strong>${esc(a.school)}</strong> coaching staff.`) +
+      p(`<strong>Just reply YES.</strong> We'll place a ${money(a.priceCents)} hold on your saved card — charged only if a coach answers.`),
+    postalAddress: a.postalAddress,
+  });
+  return { subject: `Reply YES to send to ${a.school}`, html, text: `Reply YES to send your message about ${a.athlete} to ${a.school} (${money(a.priceCents)} hold, only charged if answered).\n${a.postalAddress}` };
+}
+
+export const lineSms = {
+  coachAsk: (req: EvalRequest, url: string, earnCents: number) =>
+    `The Athlete Market: ${req.athlete_name} (${req.grad_year} ${req.position}) asked about your program${earnCents > 0 ? ` — ${money(earnCents)} for answering` : ""}. Answer in one tap: ${url} Reply STOP to opt out.`,
+  parentSent: (n: number, school: string) =>
+    `The Athlete Market: your message is on its way to ${n === 1 ? school : `${n} schools`}. We'll text you the moment a coach answers. You're only charged if they do. Reply STOP to opt out.`,
+  parentOpened: (coachName: string) => `The Athlete Market: ${coachName} just opened your message 👀`,
+  parentEscalated: (school: string, nextName: string) => `The Athlete Market: no answer yet from ${school} — we've also sent your message to ${nextName}. Still only charged if someone answers.`,
+  parentAnswered: (coachName: string, school: string, summary: string) =>
+    `The Athlete Market: ${coachName} (${school}) answered! ${summary} Full details in your email. Reply to this text to respond.`,
+  relayToParent: (coachName: string, body: string) => `${coachName}: ${body.slice(0, 280)}${body.length > 280 ? "…" : ""} (reply here to respond)`,
+};

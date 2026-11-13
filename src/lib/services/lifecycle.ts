@@ -6,7 +6,7 @@ import {
   VIDEO_HARD_MAX_SECONDS, VIDEO_MAX_BYTES, VIDEO_MIME_TYPES, VIDEO_MIN_BYTES, VIDEO_MIN_SECONDS,
 } from "../constants";
 import {
-  coachInvite, coachPaid, coachPayoutSetup, purchaserDelivered, purchaserReceipt, purchaserRefunded, type RefundWhy,
+  coachInvite, coachPaid, coachPayoutSetup, lineSms, parentAnswer, purchaserDelivered, purchaserReceipt, purchaserRefunded, type RefundWhy,
 } from "../email/templates";
 import { log } from "../log";
 import { priceBreakdown } from "../pricing";
@@ -116,6 +116,7 @@ export async function createRequestAndCheckout(
         utm_campaign: input.utmCampaign,
         parent_request_id: parentRequestId,
         format,
+        target_school: null, target_sport: null, escalation_ids: [], order_id: null,
         purchaser_phone: phone,
         purchaser_sms_opt_in_at: phone && input.parentSmsConsent === "on" ? iso(now) : null,
       });
@@ -241,6 +242,22 @@ export async function notifyCoach(deps: Deps, requestId: string) {
     const b = await deps.store.casRequest(req.id, { status: ["paid"] }, { status: "coach_notified", coach_notified_at: iso(deps.now()), last_error: null });
     if (b) {
       await event(deps, b, "coach_notified_batched", "system", "paid", "coach_notified", { reason: "coach has an unopened request; included in next combined email" });
+      await deps.store.updateCoach(coach.id, { requests_received: coach.requests_received + 1 }).catch(() => {});
+    }
+    return;
+  }
+  if (req.format === "ask") {
+    try {
+      const { sendAskInvite } = await import("./line");
+      await sendAskInvite(deps, req, coach, { key: `coach-invite-${req.id}` });
+    } catch (e) {
+      await deps.store.casRequest(req.id, { status: ["paid"] }, { last_error: `coach email: ${errMsg(e)}` });
+      log("error", "ask invite failed; cron will retry", { request_id: req.id, error: errMsg(e) });
+      return;
+    }
+    const n = await deps.store.casRequest(req.id, { status: ["paid"] }, { status: "coach_notified", coach_notified_at: iso(deps.now()), last_error: null });
+    if (n) {
+      await event(deps, n, "coach_notified", "system", "paid", "coach_notified", { to: coach.email });
       await deps.store.updateCoach(coach.id, { requests_received: coach.requests_received + 1 }).catch(() => {});
     }
     return;
@@ -448,6 +465,27 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
     delivered_count: coach.delivered_count + 1,
     delivery_hours_total: Number(coach.delivery_hours_total) + Math.round(hours * 10) / 10,
   });
+  if (r.format === "ask") {
+    const line = await import("./line");
+    try {
+      await sendEmail(deps, {
+        to: r.purchaser_email,
+        rendered: parentAnswer({ req: r, coach, postalAddress: env.postalAddress(), askAnotherUrl: line.askAnotherUrl(r), replyHint: true }),
+        template: "parent_answer", idempotencyKey: `delivered-${r.id}`, requestId: r.id, replyTo: line.parentThreadAddress(r),
+      });
+    } catch (e) {
+      await alertAdmin(deps, "Answer delivery email failed", [`${r.ref}: ${errMsg(e)}`], adminRequestUrl(r.id));
+    }
+    if (r.purchaser_phone && r.purchaser_sms_opt_in_at) {
+      await sendSms(deps, {
+        to: r.purchaser_phone,
+        body: lineSms.parentAnswered(coach.full_name, coach.school ?? r.target_school ?? "", line.answerSummary(r.answer_kind ?? "personal", (r.answer_payload ?? {}) as Record<string, unknown>)),
+        template: "parent_answered", dedupeKey: `parent-answered-${r.id}`, requestId: r.id,
+      });
+    }
+    await attemptPayout(deps, r.id);
+    return mustRequest(deps, r.id);
+  }
   try {
     await sendEmail(deps, {
       to: r.purchaser_email,
@@ -476,6 +514,10 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
 export async function attemptPayout(deps: Deps, requestId: string): Promise<EvalRequest> {
   const req = await mustRequest(deps, requestId);
   if (req.status !== "completed" || !["pending", "blocked", "failed"].includes(req.payout_status)) return req;
+  if (req.coach_payout_cents <= 0) {
+    await deps.store.casRequest(req.id, { payout_status: ["pending", "blocked", "failed"] }, { payout_status: "none", payout_block_reason: null });
+    return mustRequest(deps, req.id);
+  }
   if (!req.payment_captured_at) return req; // never pay a coach for money we haven't collected
 
   if (req.stripe_dispute_id && req.dispute_status !== "won") {

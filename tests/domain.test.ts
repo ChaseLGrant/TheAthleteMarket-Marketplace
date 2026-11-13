@@ -19,7 +19,8 @@ const coach = (o: Partial<Coach> = {}): Coach => ({
   phone: null, sms_opt_in_at: null, sms_opted_out: false, paused: false, intro_video_path: null, delivered_count: 0,
   delivery_hours_total: 0, rating_sum: 0, rating_count: 0, payout_invite_sent_at: null, last_summary_at: null,
   email_confirmed_at: null, source: "import", unlisted: false, removed: false, stripe_legal_name: null,
-  name_match_override: false, requests_received: 0,
+  name_match_override: false, requests_received: 0, email_status: "ok", camps: [], events: [], answers_count: 0,
+  answer_hours_total: 0, line_slug: null,
   created_at: "", updated_at: "", ...o,
 });
 

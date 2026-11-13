@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "./env";
-import type { Coach, DisputeRow, EmailLogRow, EvalRequest, RequestEvent, Settings } from "./types";
+import type { AskDraft, Coach, DisputeRow, EmailLogRow, EvalRequest, Order, RequestEvent, SavedPayer, Settings, ThreadMessage } from "./types";
 import { DEFAULT_SETTINGS, escapeLike, type RequestWhere, type Store } from "./store";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,6 +129,7 @@ export class SupabaseStore implements Store {
     if (f.payout_status) q = q.in("payout_status", f.payout_status);
     if (f.refund_status) q = q.in("refund_status", f.refund_status);
     if (f.coach_id) q = q.eq("coach_id", f.coach_id);
+    if (f.order_id) q = q.eq("order_id", f.order_id);
     if (f.expiresBefore) q = q.lt("expires_at", f.expiresBefore);
     if (f.completedBefore) q = q.lt("completed_at", f.completedBefore);
     if (f.purchaser_email) q = q.ilike("purchaser_email", escapeLike(f.purchaser_email));
@@ -248,6 +249,56 @@ export class SupabaseStore implements Store {
     must(await this.db.from("marketing_spend").insert(r), "spend.insert");
   }
 
+  async insertOrder(o: Omit<Order, "id" | "created_at" | "status" | "stripe_customer_id" | "stripe_payment_method_id">) {
+    return must(await this.db.from("orders").insert(o).select("*").single(), "order.insert") as Order;
+  }
+  async getOrder(id: string) {
+    return must(await this.db.from("orders").select("*").eq("id", id).maybeSingle(), "order") as Order | null;
+  }
+  async getOrderBySession(sid: string) {
+    return must(await this.db.from("orders").select("*").eq("stripe_checkout_session_id", sid).maybeSingle(), "order.session") as Order | null;
+  }
+  async updateOrder(id: string, patch: Partial<Order>) {
+    return must(await this.db.from("orders").update(patch).eq("id", id).select("*").single(), "order.update") as Order;
+  }
+  async addThreadMessage(m: Omit<ThreadMessage, "id" | "created_at">) {
+    must(await this.db.from("thread_messages").insert(m), "thread.insert");
+  }
+  async listThread(requestId: string) {
+    return must(await this.db.from("thread_messages").select("*").eq("request_id", requestId).order("created_at"), "thread") as ThreadMessage[];
+  }
+  async listStaff(school: string, sport: string) {
+    return must(await this.db.from("coaches").select("*").ilike("school", escapeLike(school.trim())).eq("sport", sport).limit(50), "staff") as Coach[];
+  }
+  async suggestSchools(q: string, limit: number) {
+    let qy = this.db.from("coaches").select("school, sport").eq("removed", false).not("email", "is", null).not("school", "is", null);
+    if (q.trim()) qy = qy.ilike("search_text", `%${escapeLike(q.trim().toLowerCase())}%`);
+    const rows = must(await qy.limit(2000), "suggest") as { school: string; sport: string }[];
+    const groups = new Map<string, { school: string; sport: string; staff: number }>();
+    for (const r of rows) {
+      const k = `${r.school}|${r.sport}`;
+      const g = groups.get(k) ?? { school: r.school, sport: r.sport, staff: 0 };
+      g.staff++;
+      groups.set(k, g);
+    }
+    return [...groups.values()].sort((a, b) => b.staff - a.staff || a.school.localeCompare(b.school)).slice(0, limit);
+  }
+  async insertDraft(d: Omit<AskDraft, "id" | "created_at" | "status" | "request_id">) {
+    return must(await this.db.from("ask_drafts").insert(d).select("*").single(), "draft.insert") as AskDraft;
+  }
+  async getDraft(id: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    return must(await this.db.from("ask_drafts").select("*").eq("id", id).maybeSingle(), "draft") as AskDraft | null;
+  }
+  async updateDraft(id: string, patch: Partial<AskDraft>) {
+    return must(await this.db.from("ask_drafts").update(patch).eq("id", id).select("*").maybeSingle(), "draft.update") as AskDraft | null;
+  }
+  async getSavedPayer(email: string) {
+    return must(await this.db.from("saved_payers").select("*").eq("email", email.toLowerCase()).maybeSingle(), "payer") as SavedPayer | null;
+  }
+  async upsertSavedPayer(p: Omit<SavedPayer, "updated_at">) {
+    must(await this.db.from("saved_payers").upsert({ ...p, email: p.email.toLowerCase(), updated_at: new Date().toISOString() }), "payer.upsert");
+  }
   async claimInbound(id: string, requestId: string | null, fromEmail: string | null) {
     const r = await this.db.from("inbound_messages").insert({ id, request_id: requestId, from_email: fromEmail, outcome: "processing" });
     if (!r.error) return true;

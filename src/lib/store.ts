@@ -1,5 +1,5 @@
 import type {
-  Coach, CoachSearch, DisputeRow, EmailLogRow, EvalRequest, PayoutStatus, RefundStatus,
+  AskDraft, Coach, CoachSearch, DisputeRow, EmailLogRow, EvalRequest, Order, SavedPayer, PayoutStatus, RefundStatus, ThreadMessage,
   RequestEvent, RequestStatus, Settings,
 } from "./types";
 
@@ -20,6 +20,7 @@ export interface RequestFilter {
   payout_status?: PayoutStatus[];
   refund_status?: RefundStatus[];
   coach_id?: string;
+  order_id?: string;
   expiresBefore?: string;
   purchaser_email?: string;
   completedBefore?: string;
@@ -36,7 +37,7 @@ export type NewRequest = Omit<
   | "last_error" | "paid_at" | "expires_at" | "coach_notified_at" | "coach_viewed_at" | "accepted_at"
   | "submitted_at" | "completed_at" | "delivered_at" | "declined_at" | "decline_reason" | "expired_at"
   | "refunded_at" | "paid_out_at" | "coach_attested_at" | "last_reminder_at" | "onboarding_email_sent_at"
-  | "purged_at" | "video_deleted_at" | "takeaway_strength" | "takeaway_improve" | "takeaway_next" | "rating" | "would_buy_again" | "rating_comment" | "rated_at" | "film_issue_at" | "film_issue_note" | "level_read" | "response_text" | "response_kind" | "response_link" | "response_from" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
+  | "purged_at" | "video_deleted_at" | "takeaway_strength" | "takeaway_improve" | "takeaway_next" | "rating" | "would_buy_again" | "rating_comment" | "rated_at" | "film_issue_at" | "film_issue_note" | "level_read" | "escalated_at" | "answer_kind" | "answer_payload" | "parent_notified_open_at" | "escalation_index" | "response_text" | "response_kind" | "response_link" | "response_from" | "video_path" | "video_mime" | "video_size_bytes" | "video_duration_seconds"
 >;
 
 export interface Store {
@@ -98,6 +99,23 @@ export interface Store {
 
   /** Inbound email idempotency: true the first time a provider message id is seen. */
   claimInbound(id: string, requestId: string | null, fromEmail: string | null): Promise<boolean>;
+
+  // Coach Line
+  insertOrder(o: Omit<Order, "id" | "created_at" | "status" | "stripe_customer_id" | "stripe_payment_method_id">): Promise<Order>;
+  getOrder(id: string): Promise<Order | null>;
+  getOrderBySession(sessionId: string): Promise<Order | null>;
+  updateOrder(id: string, patch: Partial<Order>): Promise<Order>;
+  addThreadMessage(m: Omit<ThreadMessage, "id" | "created_at">): Promise<void>;
+  listThread(requestId: string): Promise<ThreadMessage[]>;
+  /** Staff at a school for a sport (for escalation + "ask the staff"). */
+  listStaff(school: string, sport: string): Promise<Coach[]>;
+  /** Distinct schools (with sport) matching a query, for the ask box. */
+  suggestSchools(q: string, limit: number): Promise<{ school: string; sport: string; staff: number }[]>;
+  insertDraft(d: Omit<AskDraft, "id" | "created_at" | "status" | "request_id">): Promise<AskDraft>;
+  getDraft(id: string): Promise<AskDraft | null>;
+  updateDraft(id: string, patch: Partial<AskDraft>): Promise<AskDraft | null>;
+  getSavedPayer(email: string): Promise<SavedPayer | null>;
+  upsertSavedPayer(p: Omit<SavedPayer, "updated_at">): Promise<void>;
   setInboundOutcome(id: string, outcome: string): Promise<void>;
 }
 
@@ -111,6 +129,9 @@ export const DEFAULT_SETTINGS: Settings = {
   retention_days: 365,
   video_retention_days: 30,
   format_prices: { written: 2000, voice: 3500, video: 5000 },
+  ask_prices: { "1": 2000, "3": 4900, "5": 6900 },
+  ask_coach_share_bps: 5000,
+  escalate_after_hours: 48,
   show_directory_listings: true,
   require_payouts_before_booking: false,
 };

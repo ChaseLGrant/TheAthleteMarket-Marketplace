@@ -135,6 +135,19 @@ const MIN_WORDS = 25;
  * Outcomes: accepted | too_short | needs_media | declined | closed | unknown_address | duplicate
  */
 export async function handleInboundEmail(deps: Deps, msg: InboundEmail): Promise<string> {
+  // Coach Line addresses: parent thread replies, Gmail "YES", and school / coach addresses.
+  const line = await import("./line");
+  const target = await line.resolveLineAddress(deps, msg.to);
+  if (target) {
+    if (!(await deps.store.claimInbound(msg.messageId, target.kind === "parent_thread" ? target.req.id : null, msg.from))) return "duplicate";
+    const body = stripQuoted(msg.strippedReply?.trim() ? msg.strippedReply : msg.text);
+    let outcome: string;
+    if (target.kind === "parent_thread") outcome = body ? await line.relayToCoach(deps, target.req, body.slice(0, 4000), "email") : "empty";
+    else if (target.kind === "draft") outcome = await line.confirmDraftByEmail(deps, target.draft, body);
+    else outcome = body.length >= 10 ? await line.handleParentEmail(deps, { from: msg.from, subject: msg.subject, body, target }) : "too_short";
+    await deps.store.setInboundOutcome(msg.messageId, outcome).catch(() => {});
+    return outcome;
+  }
   const req = await resolveReplyAddress(deps, msg.to);
   if (!(await deps.store.claimInbound(msg.messageId, req?.id ?? null, msg.from))) return "duplicate";
   try {
@@ -148,6 +161,7 @@ export async function handleInboundEmail(deps: Deps, msg: InboundEmail): Promise
 
 async function processInbound(deps: Deps, msg: InboundEmail, req: EvalRequest | null): Promise<string> {
   const done = async (o: string) => { await deps.store.setInboundOutcome(msg.messageId, o).catch(() => {}); return o; };
+  if (req?.format === "ask") return done(await processAskReply(deps, msg, req));
   if (!req) return done("unknown_address");
 
   const coach = (await deps.store.getCoach(req.coach_id))!;
@@ -270,4 +284,47 @@ export async function textParent(deps: Deps, req: EvalRequest, kind: "sent" | "r
     : smsText.parentReleased(req, name, extraUrl ?? "");
   const { sendSms } = await import("./notify");
   await sendSms(deps, { to: req.purchaser_phone, body, template: `parent_${kind}`, dedupeKey: `parent-sms-${kind}-${req.id}`, requestId: req.id });
+}
+
+/** A coach replied by email to a Coach Line message: keyword / free-text answer, PASS, or a thread follow-up. */
+async function processAskReply(deps: Deps, msg: InboundEmail, req: EvalRequest): Promise<string> {
+  const line = await import("./line");
+  const body = stripQuoted(msg.strippedReply?.trim() ? msg.strippedReply : msg.text);
+  if (req.status === "completed") return body ? line.relayToParent(deps, req, body.slice(0, 4000), "email") : "empty";
+  const open = ["paid", "coach_notified", "accepted"].includes(req.status) && !!req.expires_at && Date.parse(req.expires_at) > deps.now().getTime();
+  if (!open) return "closed";
+  // Credit whichever coach on the staff chain actually replied.
+  const chain = await Promise.all(req.escalation_ids.map((id) => deps.store.getCoach(id)));
+  const coach = chain.find((c) => c?.email && c.email.toLowerCase() === msg.from.toLowerCase()) ?? (await deps.store.getCoach(req.coach_id))!;
+  const parsed = line.parseAskReply(body);
+  if (!parsed) return "empty";
+  if (parsed === "pass") {
+    // On a staff chain, a pass from one coach moves it to the next instead of ending it.
+    if (req.escalation_index < req.escalation_ids.length - 1) {
+      await deps.store.casRequest(req.id, { status: ["coach_notified", "accepted"] }, { escalated_at: "1970-01-01T00:00:00.000Z" });
+      await line.escalateAsks(deps);
+      return "passed_on";
+    }
+    await declineRequest(deps, req, "Coach passed", "coach");
+    return "declined";
+  }
+  if ((parsed.kind === "camp" && !coach.camps?.length) || (parsed.kind === "event" && !coach.events?.length)) {
+    // Keyword without saved details → treat the rest as a personal note if there is one; else ask them to tap.
+    if (parsed.note && parsed.note.length > 10) { parsed.kind = "personal"; }
+    else {
+      await sendEmail(deps, {
+        to: msg.from,
+        rendered: coachReplyNeedsMore({ req, coach, kind: "needs_media", recordUrl: line.answerUrl(req, coach, parsed.kind), template: "", postalAddress: env.postalAddress() }),
+        template: "ask_needs_details", idempotencyKey: `ask-details-${msg.messageId}`, requestId: req.id, coachId: coach.id,
+      }).catch(() => {});
+      return "needs_details";
+    }
+  }
+  try {
+    await line.submitAnswer(deps, req, coach, parsed);
+    return "accepted";
+  } catch (e) {
+    if (e instanceof UserFacingError) return "closed";
+    throw e;
+  }
 }

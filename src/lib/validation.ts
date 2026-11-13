@@ -122,3 +122,36 @@ export function fieldErrors(err: z.ZodError): Record<string, string> {
   }
   return out;
 }
+
+export const askSchema = z
+  .object({
+    targets: z.string().transform((v, ctx) => {
+      try {
+        const arr = JSON.parse(v) as { coachSlug?: string; school?: string; sport?: string }[];
+        if (!Array.isArray(arr) || arr.length < 1 || arr.length > 5) throw new Error();
+        return arr.map((t) => ({ coachSlug: t.coachSlug?.slice(0, 80) ?? null, school: t.school?.slice(0, 120) ?? null, sport: t.sport?.slice(0, 60) ?? null }));
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Choose at least one school or coach" });
+        return z.NEVER;
+      }
+    }),
+    message: z.string().trim().min(20, "Write a short message (a sentence or two)").max(1500),
+    athleteName: z.string().trim().min(2, "Enter the athlete's name").max(80),
+    gradYear: z.coerce.number().int().min(currentYear - 2).max(currentYear + 8),
+    position: z.string().trim().min(1, "Enter a position").max(60),
+    sport: z.string().trim().min(2).max(60),
+    filmUrl: z.string().trim().max(500).refine(isSafeFilmUrl, "Paste a full https:// link to your film"),
+    purchaserName: z.string().trim().min(2, "Enter your name").max(80),
+    purchaserEmail: z.string().trim().toLowerCase().max(254).email("Enter a valid email"),
+    purchaserPhone: z.string().trim().max(30).optional().transform((v) => (v ? v : null)),
+    parentSmsConsent: z.string().optional(),
+    athleteIsMinor: z.enum(["yes", "no"]),
+    guardianConsent: z.string().optional(),
+    acceptTerms: z.literal("on", { message: "Please accept the terms to continue" }),
+    draftToken: z.string().max(200).optional(),
+    company: z.string().max(0).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.athleteIsMinor === "yes" && v.guardianConsent !== "on")
+      ctx.addIssue({ code: "custom", path: ["guardianConsent"], message: "Parent/guardian consent is required for athletes under 18" });
+  });
