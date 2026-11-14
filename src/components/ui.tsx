@@ -4,17 +4,17 @@ import { cx, initials, money } from "@/lib/format";
 import type { Coach } from "@/lib/types";
 import { deliveryBadge, ratingBadge } from "@/lib/services/coach-stats";
 
-export function Logo({ className }: { className?: string }) {
+/** Brand lockup: the Athlete Market "A" mark + product name. `light` for dark backgrounds. */
+export function Logo({ className, light, size = "md" }: { className?: string; light?: boolean; size?: "md" | "lg" }) {
+  const h = size === "lg" ? 52 : 40;
   return (
-    <span className={cx("inline-flex items-center gap-2 font-bold tracking-tight text-navy", className)}>
-      <svg aria-hidden viewBox="0 0 64 64" className="h-7 w-7">
-        <rect width="64" height="64" rx="14" fill="#0B1B3F" />
-        <path d="M18 22h28M32 22v24" stroke="#fff" strokeWidth="6" strokeLinecap="round" />
-        <circle cx="46" cy="44" r="5" fill="#1F5FFF" />
-      </svg>
-      <span className="text-[15px] leading-none">
-        The Athlete Market
-        <span className="ml-1.5 font-medium text-blue">Evaluations</span>
+    <span className={cx("inline-flex items-center gap-2.5", light ? "text-white" : "text-navy", className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={light ? "/brand/logo-white.png" : "/brand/logo-black.png"} alt="The Athlete Market" width={Math.round(h * 1.22)} height={h} style={{ height: h, width: "auto" }} />
+      <span aria-hidden className={cx("h-7 w-px", light ? "bg-white/25" : "bg-line")} />
+      <span className="flex flex-col leading-none">
+        <span className={cx("whitespace-nowrap text-[15px] font-extrabold uppercase tracking-[0.14em]", size === "lg" && "text-[18px]")}>Coach Line</span>
+        <span className={cx("mt-1 hidden whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.18em] sm:block", light ? "text-white/55" : "text-subtle")}>by The Athlete Market</span>
       </span>
     </span>
   );

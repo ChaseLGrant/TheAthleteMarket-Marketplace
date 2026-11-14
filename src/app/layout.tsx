@@ -7,22 +7,22 @@ const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://marketplace.theathlete
 
 export const metadata: Metadata = {
   metadataBase: new URL(site),
-  title: { default: "College Coach Video Evaluations | The Athlete Market", template: "%s | The Athlete Market" },
+  title: { default: "Coach Line — The Direct Line to College Coaches | The Athlete Market", template: "%s | The Athlete Market" },
   description:
-    "Get a personal 30–60 second video evaluation of your highlight film from a verified college-level coach. You're only charged when your video is delivered. No accounts, no app.",
-  applicationName: "The Athlete Market Evaluations",
+    "Message any college coaching staff about camp dates, events and what level you fit. Get a real answer or pay nothing. No account, no app.",
+  applicationName: "Coach Line by The Athlete Market",
   openGraph: {
     type: "website",
     siteName: "The Athlete Market",
-    title: "Honest feedback on your film from a college-level coach",
-    description: "Personal 30–60 second video evaluations. Charged only when delivered.",
+    title: "Coach Line — the direct line to college coaches",
+    description: "Camp dates, events, what level you fit — answered or it's free.",
     url: site,
   },
   twitter: { card: "summary_large_image" },
   alternates: { canonical: "/" },
 };
 
-export const viewport: Viewport = { themeColor: "#0B1B3F", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#0A0D14", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const demo = isDemoMode();

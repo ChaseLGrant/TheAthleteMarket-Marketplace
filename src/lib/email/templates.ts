@@ -1,3 +1,4 @@
+import { env } from "../env";
 import { money, dateOnly } from "../format";
 import type { Coach, EvalRequest } from "../types";
 
@@ -11,7 +12,7 @@ export function esc(s: string | number | null | undefined): string {
     .replace(/'/g, "&#39;");
 }
 
-const NAVY = "#0B1B3F";
+const NAVY = "#0A0D14";
 const BLUE = "#1F5FFF";
 const MUTED = "#5B6680";
 
@@ -31,7 +32,10 @@ function layout(o: LayoutOpts): string {
 <span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${esc(o.preheader)}</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F6FB;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E3E8F2;">
-<tr><td style="padding:22px 28px;background:${NAVY};color:#fff;font-weight:700;font-size:15px;letter-spacing:.2px;">The Athlete Market <span style="color:#8FB0FF;font-weight:500;">· Evaluations</span></td></tr>
+<tr><td style="padding:18px 28px;background:${NAVY};color:#fff;"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;"><img src="${env.siteUrl()}/brand/logo-white.png" width="44" height="36" alt="The Athlete Market" style="display:block;border:0;height:36px;width:auto;"></td>
+<td style="vertical-align:middle;padding-left:12px;border-left:1px solid rgba(255,255,255,.25);"><div style="font-size:14px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;line-height:1;">Coach Line</div><div style="font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:4px;line-height:1;">by The Athlete Market</div></td>
+</tr></table></td></tr>
 <tr><td style="padding:28px 28px 8px;">
 <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;color:${NAVY};">${esc(o.heading)}</h1>
 ${o.bodyHtml}
@@ -292,7 +296,7 @@ export function purchaserDelivered(a: { req: EvalRequest; coach: Coach; videoUrl
   const subject = `${coach.full_name} replied: ${first}'s ${FORMAT_WORD[req.format]}`;
   const where = [coach.title, coach.school].filter(Boolean).join(", ");
   const level = req.level_read
-    ? `<div style="margin:0 0 14px;padding:14px 16px;background:#0B1B3F;border-radius:12px;color:#fff;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8FB0FF;">Level ${esc(coach.full_name.split(" ")[0])} sees ${esc(first)} at</div><div style="font-size:20px;font-weight:700;margin-top:4px;">${esc(req.level_read)}</div></div>`
+    ? `<div style="margin:0 0 14px;padding:14px 16px;background:#0A0D14;border-radius:12px;color:#fff;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8FB0FF;">Level ${esc(coach.full_name.split(" ")[0])} sees ${esc(first)} at</div><div style="font-size:20px;font-weight:700;margin-top:4px;">${esc(req.level_read)}</div></div>`
     : "";
   const written = req.response_text
     ? `<div style="margin:0 0 14px;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.response_text)}</div>`

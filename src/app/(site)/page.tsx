@@ -37,8 +37,10 @@ export default async function Home() {
   return (
     <>
       {/* Hero */}
-      <section className="relative bg-navy text-white">
+      <section className="relative overflow-x-clip bg-navy text-white">
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden opacity-60" style={{ background: "radial-gradient(60rem 30rem at 85% -10%, rgba(31,95,255,.55), transparent 60%), radial-gradient(40rem 20rem at 0% 120%, rgba(31,95,255,.35), transparent 60%)" }} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/logo-white.png" alt="" aria-hidden className="pointer-events-none absolute -bottom-10 right-[-12%] w-[340px] opacity-[0.06] sm:right-[-2%] sm:w-[620px]" />
         <div className="container-page relative pb-20 pt-14 sm:pb-28 sm:pt-24">
           <p className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-[#BFD0FF] ring-1 ring-white/15">
             Coach Line · Answered or it&apos;s free
