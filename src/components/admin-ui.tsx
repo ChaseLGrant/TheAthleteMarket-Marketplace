@@ -34,7 +34,7 @@ export function AdminForm({ action, children, submit = "Save", className }: { ac
     <form action={run} className={cx("space-y-4", className)}>
       {children}
       <div className="flex items-center gap-3">
-        <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : submit}</button>
+        <button className="btn-primary shrink-0 whitespace-nowrap" disabled={pending}>{pending ? "Saving…" : submit}</button>
         {state.ok && <span className="text-sm font-medium text-success">{state.ok}</span>}
         {state.error && <span className="text-sm font-medium text-danger">{state.error}</span>}
       </div>

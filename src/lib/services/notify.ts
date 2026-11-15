@@ -29,6 +29,11 @@ export async function sendEmail(
     template: a.template,
     subject: a.rendered.subject,
   };
+  // Test mode: reroute every email to the owner's inbox, labeled with who it was really for.
+  const testInbox = env.testInbox();
+  if (testInbox && a.to.toLowerCase() !== testInbox) {
+    a = { ...a, to: testInbox, rendered: { ...a.rendered, subject: `[TEST → ${a.to}] ${a.rendered.subject}` } };
+  }
   if (a.marketing && (await deps.store.isSuppressed(a.to))) {
     await deps.store.logEmail({ ...base, provider_id: null, status: "suppressed", error: null });
     return "suppressed";
@@ -84,6 +89,12 @@ export async function sendSms(
   deps: Deps,
   a: { to: string | null; body: string; template: string; dedupeKey: string; requestId?: string | null; coachId?: string | null },
 ): Promise<"sent" | "skipped" | "opted_out" | "failed"> {
+  if (env.testInbox() || env.testPhone()) {
+    // Test mode: texts only ever go to the owner's phone.
+    const tp = env.testPhone();
+    if (!tp) return "skipped";
+    if (a.to && a.to !== tp) a = { ...a, body: `[TEST → ${a.to}] ${a.body}`, to: tp };
+  }
   if (!a.to || !deps.sms.enabled) return "skipped";
   const claimed = await deps.store
     .claimMessage({

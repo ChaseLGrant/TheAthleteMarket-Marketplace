@@ -50,6 +50,10 @@ export const env = {
     return sid && token && (service || from) ? { sid, token, service, from } : null;
   },
   adminAlertPhone: () => opt("ADMIN_ALERT_PHONE"),
+  /** TEST MODE: when set, EVERY email goes here instead (parents and coaches) — so you can test both sides safely. */
+  testInbox: () => opt("TEST_INBOX")?.trim().toLowerCase() || null,
+  /** TEST MODE: every text goes to this phone. With TEST_INBOX set and no TEST_PHONE, texts are skipped. */
+  testPhone: () => opt("TEST_PHONE")?.trim() || null,
   appSecret: () => {
     const s = isDemoMode() ? opt("APP_SECRET") ?? "demo-secret-demo-secret-demo-secret!!" : req("APP_SECRET");
     if (s.length < 32) throw new Error("APP_SECRET must be at least 32 characters.");

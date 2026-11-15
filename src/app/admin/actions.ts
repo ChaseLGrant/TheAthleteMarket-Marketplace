@@ -267,3 +267,53 @@ export async function addSpend(_: Result, fd: FormData): Promise<Result> {
     return "Spend recorded";
   }, "/admin/settings");
 }
+
+// ---------------------------------------------------------------- launch: your own test school
+const TEST_SCHOOL = "Athlete Market Test University";
+
+/** Creates a 3-person test staff with YOU as recruiting coordinator, so you can play coach and parent. */
+export async function createTestSchool(_: Result, fd: FormData): Promise<Result> {
+  return run(async () => {
+    const deps = await getDeps();
+    const name = String(fd.get("name") ?? "").trim().slice(0, 80);
+    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    const sport = String(fd.get("sport") ?? "Basketball (M)").slice(0, 60);
+    const phone = toE164(String(fd.get("phone") ?? ""));
+    if (name.length < 2 || !z.string().email().safeParse(email).success) throw new Error("Enter your name and email.");
+    const now = deps.now().toISOString();
+    const base = {
+      school: TEST_SCHOOL, sport, division: "NCAA D1", state: "TX", coach_kind: "active_college" as const, source: "admin" as const,
+      listing_type: "participating" as const, verification_status: "verified" as const, eligibility_status: "approved" as const,
+      email_confirmed_at: now, is_demo: true,
+    };
+    const staff: (Partial<Coach> & Pick<Coach, "slug" | "full_name" | "sport">)[] = [
+      { ...base, slug: `test-u-${slugify(sport)}-you`, full_name: name, title: "Recruiting Coordinator", email,
+        phone, sms_opt_in_at: phone ? now : null,
+        camps: [{ name: "Test U Elite Prospect Camp", dates: "June 14–15", location: "Test U Arena", url: "https://theathletemarket.com" }],
+        events: [{ name: "Summer Showcase", dates: "July 8–10", location: "Atlanta, GA" }] },
+    ];
+    // Placeholder teammates (so "pass it on" works) only when every email is rerouted to you.
+    if (env.testInbox()) {
+      staff.push(
+        { ...base, slug: `test-u-${slugify(sport)}-asst`, full_name: "Test Assistant", title: "Assistant Coach", email: "test-assistant@example.com" },
+        { ...base, slug: `test-u-${slugify(sport)}-head`, full_name: "Test Head Coach", title: "Head Coach", email: "test-head@example.com" },
+      );
+    }
+    for (const c of staff) {
+      const existing = await deps.store.getCoachBySlug(c.slug);
+      if (existing) await deps.store.updateCoach(existing.id, { ...c, removed: false });
+      else await deps.store.insertCoach(c);
+    }
+    return `${TEST_SCHOOL} (${sport}) is ready with ${staff.length} coach${staff.length === 1 ? "" : "es"}. Search "Test University" on the homepage.`;
+  }, "/admin/launch");
+}
+
+export async function removeTestSchool(_: Result): Promise<Result> {
+  return run(async () => {
+    const deps = await getDeps();
+    const { coaches } = await deps.store.searchCoaches({ q: "Test University", limit: 50, includeDirectory: true });
+    let n = 0;
+    for (const c of coaches) if (c.school === TEST_SCHOOL) { await deps.store.updateCoach(c.id, { removed: true }); n++; }
+    return `Hid ${n} test coach${n === 1 ? "" : "es"}.`;
+  }, "/admin/launch");
+}
