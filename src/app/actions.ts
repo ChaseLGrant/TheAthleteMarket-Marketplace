@@ -120,7 +120,13 @@ export async function addCoachAndRequest(_prev: FormState, fd: FormData): Promis
 export async function submitAsk(_prev: FormState, fd: FormData): Promise<FormState> {
   const values = formValues(fd);
   const parsed = askSchema.safeParse(values);
-  if (!parsed.success) return { error: "Please fix the highlighted fields.", fields: fieldErrors(parsed.error), values };
+  if (!parsed.success) {
+    const fields = fieldErrors(parsed.error);
+    // Show every missing checkbox at once (zod skips the consent check when another field fails).
+    if (values.athleteIsMinor !== "no" && values.guardianConsent !== "on" && !fields.guardianConsent)
+      fields.guardianConsent = "Check this box to confirm you're the parent or guardian";
+    return { error: "Almost there — fix the items below.", fields, values };
+  }
   const v = parsed.data;
   const film = await checkFilmLink(v.filmUrl);
   if (film.status === "private" || film.status === "not_found")

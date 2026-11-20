@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { submitAsk, type FormState } from "@/app/actions";
 import { askPricing } from "@/lib/ask-pricing";
 import { cx } from "@/lib/format";
@@ -36,6 +36,15 @@ export function AskForm(p: {
   const [minor, setMinor] = useState<"yes" | "no">((v.athleteIsMinor as "yes" | "no") ?? "yes");
   const [edited, setEdited] = useState<string | null>(v.message ?? null);
   const err = state.fields ?? {};
+  const formRef = useRef<HTMLFormElement>(null);
+  // After a failed Send, jump to the first problem so it never looks like "nothing happened".
+  useEffect(() => {
+    if (!state.error) return;
+    const f = formRef.current;
+    const first = f?.querySelector<HTMLElement>('[aria-invalid="true"], .field-error') ?? f?.querySelector<HTMLElement>('[role="status"]');
+    first?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (first instanceof HTMLInputElement || first instanceof HTMLTextAreaElement) first.focus({ preventScroll: true });
+  }, [state]);
 
   const auto = useMemo(() => {
     const who = athlete.trim() || "[athlete]";
@@ -55,7 +64,7 @@ export function AskForm(p: {
   };
 
   return (
-    <form action={action} className="space-y-8" noValidate>
+    <form ref={formRef} action={action} className="space-y-8" noValidate>
       <input type="hidden" name="targets" value={JSON.stringify(targets.map(({ coachSlug, school, sport }) => ({ coachSlug, school, sport })))} />
       <input type="hidden" name="message" value={message} />
       <input type="hidden" name="draftToken" value={p.draftToken ?? ""} />
@@ -155,6 +164,16 @@ export function AskForm(p: {
       </fieldset>
 
       <div className="space-y-3">
+        {state.error && (
+          <div role="status" className="rounded-xl bg-danger-50 px-4 py-3 text-sm text-[#7a1717] ring-1 ring-[#f3c4c4]">
+            <p className="font-semibold">{state.error}</p>
+            {Object.keys(err).length > 0 && (
+              <ul className="mt-1 list-disc pl-5">
+                {Object.entries(err).map(([k, m]) => <li key={k}>{m}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
         {!p.free && <div className="flex items-baseline justify-between rounded-2xl border border-line px-4 py-3">
           <span className="text-sm text-muted">{n || 1} school{n === 1 || !n ? "" : "s"}{n >= 3 ? <span className="ml-2 rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success">save {dollars(single * n - price.total)}</span> : null}</span>
           <span className="text-xl font-bold">{dollars(price.total)}</span>
