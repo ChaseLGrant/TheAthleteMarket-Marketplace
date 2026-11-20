@@ -109,6 +109,7 @@ export interface Store {
   addThreadMessage(m: Omit<ThreadMessage, "id" | "created_at">): Promise<void>;
   listThread(requestId: string): Promise<ThreadMessage[]>;
   /** Staff at a school for a sport (for escalation + "ask the staff"). */
+  /** Listed staff only — coaches a family added privately (unlisted) are never suggested to anyone else. */
   listStaff(school: string, sport: string): Promise<Coach[]>;
   /** Distinct schools (with sport) matching a query, for the ask box. */
   suggestSchools(q: string, limit: number): Promise<{ school: string; sport: string; staff: number }[]>;

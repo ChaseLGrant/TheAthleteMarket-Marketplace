@@ -240,3 +240,23 @@ describe("coach answer page actions", () => {
     expect(sig).toBe("0/KCTR6DLpKmkAf8muzZqo1nDgQ=");
   });
 });
+
+describe("any coach, by email (no directory)", () => {
+  it("a privately added coach (no school, no sport) can be messaged, and is never suggested to other families", async () => {
+    const { deps } = makeDeps();
+    await deps.store.insertCoach({ slug: "jordan-smith", full_name: "Jordan Smith", email: "jsmith@stateu.example.edu", sport: "Other", school: null,
+      listing_type: "directory", source: "family", unlisted: true, coach_kind: "active_college" });
+    const { orderId } = await createAskOrder(deps, input({ targets: [{ coachSlug: "jordan-smith" }] }), { ip: "1.1.1.1" });
+    const order = (await deps.store.getOrder(orderId))!;
+    deps.payments.setupSessions.get(order.stripe_checkout_session_id!)!.completed = true;
+    await handleAskSetupCompleted(deps, order.stripe_checkout_session_id!);
+    const [r] = await deps.store.listRequests({ order_id: orderId });
+    expect(r!.status).toBe("coach_notified");
+    expect(r!.sport).toBe("Basketball (M)");
+    expect(r!.target_school).toBe("Jordan Smith");
+    expect(mails(deps, "jsmith@stateu.example.edu")[0]!.subject).toMatch(/sent you a question — answer in one tap/);
+    expect((await deps.store.getCoachBySlug("jordan-smith"))!.sport).toBe("Basketball (M)");
+    expect(await deps.store.suggestSchools("jordan", 10)).toEqual([]);
+    expect((await deps.store.searchCoaches({ q: "Jordan", limit: 10 })).coaches).toEqual([]);
+  });
+});

@@ -335,7 +335,7 @@ export function purchaserRefunded(a: {
   const { req, coach } = a;
   const reason = req.format === "ask"
     ? (a.why === "declined" || a.why === "expired"
-        ? `No one on the ${esc(req.target_school ?? coach.school ?? "")} staff answered in time.`
+        ? (req.target_school === coach.full_name ? `${esc(coach.full_name)} didn't answer in time.` : `No one on the ${esc(req.target_school ?? coach.school ?? "")} staff answered in time.`)
         : `We couldn't reach the ${esc(req.target_school ?? coach.school ?? "")} staff.`)
     : a.why === "declined"
       ? `${esc(coach.full_name)} wasn't able to take this request.`
@@ -453,7 +453,7 @@ export function coachAskInvite(a: {
     ? `${req.athlete_name} is still waiting on your answer${earn}`
     : a.reminder
     ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left to answer ${req.athlete_name}${earn}`
-    : `${who} asked about ${req.target_school ?? "your program"} — answer in one tap${earn}`;
+    : `${who} ${req.target_school && req.target_school !== coach.full_name ? `asked about ${req.target_school}` : "sent you a question"} — answer in one tap${earn}`;
   const buttons = ANSWER_BUTTONS.map(
     (b) => `<tr><td style="padding:0 0 8px;"><a href="${esc(a.answerUrl(b.kind))}" style="display:block;padding:12px 14px;border:1px solid #DCE6FF;border-radius:12px;background:#F6F9FF;text-decoration:none;color:${NAVY};"><span style="font-size:15px;font-weight:700;">${b.label}</span><br><span style="font-size:12.5px;color:${MUTED};">${b.sub}</span></a></td></tr>`,
   ).join("");
@@ -508,8 +508,9 @@ export function parentAnswer(a: {
   req: EvalRequest; coach: Coach; postalAddress: string; askAnotherUrl?: string; replyHint: boolean;
 }): Rendered {
   const { req, coach } = a;
-  const school = coach.school ?? req.target_school ?? "the program";
-  const subject = `${coach.full_name} (${school}) answered ${req.athlete_name.split(" ")[0]} 🎉`;
+  const school = coach.school ?? (req.target_school !== coach.full_name ? req.target_school : null);
+  const who = school ? `${coach.full_name} (${school})` : coach.full_name;
+  const subject = `${who} answered ${req.athlete_name.split(" ")[0]} 🎉`;
   const html = layout({
     preheader: `${coach.full_name} answered your message about ${req.athlete_name}.`,
     heading: `${coach.full_name} answered`,
@@ -519,11 +520,11 @@ export function parentAnswer(a: {
       p(`<strong>Want to respond?</strong> Just reply to this email (or text us back if you got a text) — we'll pass it straight to ${esc(coach.full_name.split(" ")[0])}. Follow-ups are free.`) +
       p(`<span style="font-size:13px;color:${MUTED};">Your email and phone stay private — every message goes through The Athlete Market.</span>`),
     cta: a.askAnotherUrl ? { label: "Ask another school", url: a.askAnotherUrl } : undefined,
-    footerHtml: `Reference ${esc(req.ref)}. Ask any college coach at theathletemarket.com — answered or it's free.`,
+    footerHtml: `Reference ${esc(req.ref)}. Ask any college coach on Coach Line by The Athlete Market.`,
     postalAddress: a.postalAddress,
   });
   const pl = (req.answer_payload ?? {}) as Record<string, string>;
-  const text = [`${coach.full_name} (${school}) answered about ${req.athlete_name}.`, "",
+  const text = [`${who} answered about ${req.athlete_name}.`, "",
     req.answer_kind === "camp" ? `Camp: ${pl.name} — ${pl.dates}${pl.location ? `, ${pl.location}` : ""}${pl.url ? `\nRegister: ${pl.url}` : ""}` : "",
     req.answer_kind === "event" ? `They'll be at: ${pl.name} — ${pl.dates}${pl.location ? `, ${pl.location}` : ""}` : "",
     req.answer_kind === "film" ? "They'd like more film — reply with a link." : "",
@@ -604,6 +605,6 @@ export const lineSms = {
   parentOpened: (coachName: string) => `The Athlete Market: ${coachName} just opened your message 👀`,
   parentEscalated: (school: string, nextName: string, free = false) => `The Athlete Market: no answer yet from ${school} — we've also sent your message to ${nextName}.${free ? "" : " Still only charged if someone answers."}`,
   parentAnswered: (coachName: string, school: string, summary: string) =>
-    `The Athlete Market: ${coachName} (${school}) answered! ${summary} Full details in your email. Reply to this text to respond.`,
+    `The Athlete Market: ${coachName}${school ? ` (${school})` : ""} answered! ${summary} Full details in your email. Reply to this text to respond.`,
   relayToParent: (coachName: string, body: string) => `${coachName}: ${body.slice(0, 280)}${body.length > 280 ? "…" : ""} (reply here to respond)`,
 };

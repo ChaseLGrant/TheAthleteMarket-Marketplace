@@ -479,7 +479,7 @@ export async function completeRequest(deps: Deps, requestId: string, actor: stri
     if (r.purchaser_phone && r.purchaser_sms_opt_in_at) {
       await sendSms(deps, {
         to: r.purchaser_phone,
-        body: lineSms.parentAnswered(coach.full_name, coach.school ?? r.target_school ?? "", line.answerSummary(r.answer_kind ?? "personal", (r.answer_payload ?? {}) as Record<string, unknown>)),
+        body: lineSms.parentAnswered(coach.full_name, coach.school ?? (r.target_school !== coach.full_name ? r.target_school ?? "" : ""), line.answerSummary(r.answer_kind ?? "personal", (r.answer_payload ?? {}) as Record<string, unknown>)),
         template: "parent_answered", dedupeKey: `parent-answered-${r.id}`, requestId: r.id,
       });
     }

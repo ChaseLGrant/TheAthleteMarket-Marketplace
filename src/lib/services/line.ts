@@ -91,9 +91,12 @@ export async function createAskOrder(deps: Deps, input: AskInput, ctx: { ip: str
     const coach = t.coachSlug ? await store.getCoachBySlug(t.coachSlug) : null;
     const chain = await buildChain(deps, { coach, school: t.school, sport: t.sport ?? input.sport });
     if (!chain.length) throw new UserFacingError(`We can't reach anyone at ${coach?.school ?? t.school ?? "that school"} right now. Try another school.`);
-    const school = coach?.school ?? t.school ?? chain[0]!.school ?? "the program";
-    if (chains.some((c) => c.school === school && c.sport === chain[0]!.sport)) continue; // duplicate school
-    chains.push({ chain, school, sport: chain[0]!.sport });
+    const school = coach?.school || t.school || chain[0]!.school || coach?.full_name || "the program";
+    // A privately added coach with no sport on file takes the athlete's sport.
+    if (coach?.source === "family" && coach.sport === "Other" && input.sport) await store.updateCoach(coach.id, { sport: input.sport }).catch(() => {});
+    const sport = coach ? input.sport || coach.sport : chain[0]!.sport;
+    if (chains.some((c) => c.school === school && c.sport === sport)) continue; // duplicate school
+    chains.push({ chain, school, sport });
   }
   const pricing = askPricing(askPrices(settings), chains.length);
   const now = deps.now();

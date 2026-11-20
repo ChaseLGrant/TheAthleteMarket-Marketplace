@@ -271,10 +271,10 @@ export class SupabaseStore implements Store {
     return must(await this.db.from("thread_messages").select("*").eq("request_id", requestId).order("created_at"), "thread") as ThreadMessage[];
   }
   async listStaff(school: string, sport: string) {
-    return must(await this.db.from("coaches").select("*").ilike("school", escapeLike(school.trim())).eq("sport", sport).limit(50), "staff") as Coach[];
+    return must(await this.db.from("coaches").select("*").ilike("school", escapeLike(school.trim())).eq("sport", sport).eq("unlisted", false).limit(50), "staff") as Coach[];
   }
   async suggestSchools(q: string, limit: number) {
-    let qy = this.db.from("coaches").select("school, sport").eq("removed", false).not("email", "is", null).not("school", "is", null);
+    let qy = this.db.from("coaches").select("school, sport").eq("removed", false).eq("unlisted", false).not("email", "is", null).not("school", "is", null);
     if (q.trim()) qy = qy.ilike("search_text", `%${escapeLike(q.trim().toLowerCase())}%`);
     const rows = must(await qy.limit(2000), "suggest") as { school: string; sport: string }[];
     const groups = new Map<string, { school: string; sport: string; staff: number }>();

@@ -28,6 +28,7 @@ export const SPORTS = [
   "Volleyball (M)",
   "Volleyball (W)",
   "Wrestling",
+  "Other",
   "Ice Hockey",
   "Field Hockey",
   "Rowing",

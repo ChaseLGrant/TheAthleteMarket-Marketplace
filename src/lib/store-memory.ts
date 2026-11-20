@@ -231,13 +231,13 @@ export class MemoryStore implements Store {
   async listThread(requestId: string) { return clone(this.thread.filter((t) => t.request_id === requestId)); }
   async listStaff(school: string, sport: string) {
     const s = school.trim().toLowerCase();
-    return clone([...this.coaches.values()].filter((c) => (c.school ?? "").trim().toLowerCase() === s && c.sport === sport));
+    return clone([...this.coaches.values()].filter((c) => !c.unlisted && (c.school ?? "").trim().toLowerCase() === s && c.sport === sport));
   }
   async suggestSchools(q: string, limit: number) {
     const t = q.trim().toLowerCase();
     const groups = new Map<string, { school: string; sport: string; staff: number }>();
     for (const c of this.coaches.values()) {
-      if (!c.school || c.removed || !c.email) continue;
+      if (!c.school || c.removed || c.unlisted || !c.email) continue;
       if (t && !`${c.school} ${c.sport} ${c.full_name}`.toLowerCase().includes(t)) continue;
       const k = `${c.school}|${c.sport}`;
       const g = groups.get(k) ?? { school: c.school, sport: c.sport, staff: 0 };

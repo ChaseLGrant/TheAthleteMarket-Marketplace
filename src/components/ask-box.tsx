@@ -7,7 +7,7 @@ export interface Target { coachSlug?: string; school?: string; sport?: string; l
 interface Suggest { schools: { school: string; sport: string; staff: number; address: string }[]; coaches: { slug: string; name: string; title: string | null; school: string | null; sport: string; address: string }[] }
 
 /** Typeahead: pick a school's staff (recommended) or a specific coach. */
-export function AskBox({ onPick, placeholder = "Type a college or coach…", autoFocus, dark }: {
+export function AskBox({ onPick, placeholder = "Type a college — or paste any coach’s email", autoFocus, dark }: {
   onPick: (t: Target) => void; placeholder?: string; autoFocus?: boolean; dark?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -17,7 +17,7 @@ export function AskBox({ onPick, placeholder = "Type a college or coach…", aut
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (q.trim().length < 2) { setData({ schools: [], coaches: [] }); return; }
+    if (q.trim().length < 2 || q.includes("@")) { setData({ schools: [], coaches: [] }); return; }
     timer.current = setTimeout(async () => {
       const r = await fetch(`/api/line/suggest?q=${encodeURIComponent(q)}`).then((x) => x.json()).catch(() => null);
       if (r) { setData(r); setOpen(true); }
@@ -26,7 +26,8 @@ export function AskBox({ onPick, placeholder = "Type a college or coach…", aut
 
   const [adding, setAdding] = useState(false);
   const pick = (t: Target) => { onPick(t); setQ(""); setOpen(false); setAdding(false); };
-  const empty = q.trim().length >= 2 && !data.schools.length && !data.coaches.length;
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q.trim());
+  const empty = q.trim().length >= 2 && !isEmail && !data.schools.length && !data.coaches.length;
 
   return (
     <div className="relative">
@@ -36,6 +37,13 @@ export function AskBox({ onPick, placeholder = "Type a college or coach…", aut
         placeholder={placeholder}
         className={cx("h-14 w-full rounded-xl px-4 text-[16px] outline-none", dark ? "bg-white text-navy placeholder:text-subtle" : "field")}
       />
+      {isEmail && !adding && (
+        <button type="button" onClick={() => setAdding(true)}
+          className="mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border border-blue bg-blue-50 px-4 py-3 text-left text-navy">
+          <span className="min-w-0"><span className="block font-semibold">✉️ Message this coach</span><span className="block truncate text-sm text-muted">{q.trim()}</span></span>
+          <span className="shrink-0 text-sm font-semibold text-blue">Next →</span>
+        </button>
+      )}
       {open && !adding && (data.schools.length > 0 || data.coaches.length > 0 || empty) && (
         <div className="absolute inset-x-0 top-[calc(100%+6px)] z-30 max-h-[60vh] overflow-auto rounded-2xl border border-line bg-white p-2 text-left text-navy shadow-[var(--shadow-lift)]">
           {data.schools.map((s) => (
@@ -60,49 +68,48 @@ export function AskBox({ onPick, placeholder = "Type a college or coach…", aut
           )}
         </div>
       )}
-      {!adding ? (
+      {!adding && !isEmail ? (
         <button type="button" onClick={() => { setAdding(true); setOpen(false); }}
           className={cx("mt-2 text-sm font-semibold", dark ? "px-2 pb-1 text-blue" : "text-blue")}>
-          + Have a coach&apos;s email? Add any college coach
+          + Message any college coach by email
         </button>
-      ) : (
-        <AddCoach initialSchool={q.trim()} onAdded={pick} onCancel={() => setAdding(false)} />
+      ) : adding && (
+        <AddCoach initialSchool={isEmail ? "" : q.trim()} initialEmail={isEmail ? q.trim() : ""} onAdded={pick} onCancel={() => setAdding(false)} />
       )}
     </div>
   );
 }
 
-/** Any college coach, by email (from the school's staff directory page). */
-function AddCoach({ initialSchool, onAdded, onCancel }: { initialSchool: string; onAdded: (t: Target) => void; onCancel: () => void }) {
-  const [v, setV] = useState({ coachName: "", title: "", school: initialSchool, sport: "", coachEmail: "" });
+/** Any college coach, by email — no directory needed. Kept private to this family. */
+function AddCoach({ initialSchool, initialEmail, onAdded, onCancel }: { initialSchool: string; initialEmail: string; onAdded: (t: Target) => void; onCancel: () => void }) {
+  const [v, setV] = useState({ coachEmail: initialEmail, coachName: "", school: initialSchool, sport: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV({ ...v, [k]: e.target.value });
   async function add() {
     setBusy(true); setError(null);
-    const r = await fetch("/api/line/add-coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...v, title: v.title || undefined }) }).catch(() => null);
+    const r = await fetch("/api/line/add-coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) }).catch(() => null);
     const j = await r?.json().catch(() => ({}));
     setBusy(false);
     if (r?.ok && j?.target) return onAdded(j.target as Target);
-    setError(j?.error ?? "Couldn't add that coach. Check the details and try again.");
+    setError(j?.error ?? "Couldn't add that coach. Check the email and try again.");
   }
   return (
     <div className="mt-2 space-y-3 rounded-2xl border border-line bg-white p-4 text-left text-navy">
       <div>
-        <p className="font-semibold">Add any college coach</p>
-        <p className="text-xs text-muted">Find their email on the school&apos;s athletics staff directory. We deliver your message — they never see your email.</p>
+        <p className="font-semibold">Message any college coach</p>
+        <p className="text-xs text-muted">Coach emails are on every school&apos;s athletics staff page. We deliver your message and their answer — your email stays private.</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="label min-w-0">Coach&apos;s name<input className="field mt-1" value={v.coachName} onChange={set("coachName")} placeholder="Jordan Smith" autoComplete="off" /></label>
-        <label className="label min-w-0">Title (optional)<input className="field mt-1" value={v.title} onChange={set("title")} placeholder="Assistant Coach" autoComplete="off" /></label>
-        <label className="label min-w-0">School<input className="field mt-1" value={v.school} onChange={set("school")} placeholder="State University" autoComplete="off" /></label>
-        <label className="label min-w-0">Sport
+        <label className="label min-w-0 sm:col-span-2">Coach&apos;s email<input className="field mt-1" type="email" inputMode="email" value={v.coachEmail} onChange={set("coachEmail")} placeholder="jsmith@stateu.edu" autoComplete="off" /></label>
+        <label className="label min-w-0">Coach&apos;s name<input className="field mt-1" value={v.coachName} onChange={set("coachName")} placeholder="Coach Jordan Smith" autoComplete="off" autoFocus={!!initialEmail} /></label>
+        <label className="label min-w-0">School <span className="font-normal text-muted">(optional)</span><input className="field mt-1" value={v.school} onChange={set("school")} placeholder="State University" autoComplete="off" /></label>
+        <label className="label min-w-0 sm:col-span-2">Sport <span className="font-normal text-muted">(optional)</span>
           <select className="field mt-1" value={v.sport} onChange={set("sport")}>
-            <option value="">Choose…</option>
+            <option value="">—</option>
             {SPORTS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </label>
-        <label className="label min-w-0 sm:col-span-2">Coach&apos;s email<input className="field mt-1" type="email" inputMode="email" value={v.coachEmail} onChange={set("coachEmail")} placeholder="jsmith@stateu.edu" autoComplete="off" /></label>
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="flex gap-2">
