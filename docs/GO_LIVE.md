@@ -1,5 +1,9 @@
 # Go live: step by step (no coding needed)
 
+> **Payments off for now.** Until you add a Stripe key, Coach Line runs **free**: there's no card step, nothing is charged,
+> and coaches aren't promised money. Everything else works: messages, one-tap answers, texts, passing to the next coach,
+> and replies. **Skip A2 and A6** for now. When you're ready to charge, follow "Turn on payments" at the bottom.
+
 Two phases:
 
 * **Phase A, test run (about 45 minutes).** The real site runs on its own web address with **fake payments**. Every email and text
@@ -47,7 +51,7 @@ Then pick an admin password for yourself (`ADMIN_PASSWORD`).
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL (A1) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key (A1) |
-| `STRIPE_SECRET_KEY` | `sk_test_…` (A2) |
+| `PAYMENTS_OFF` | `1` (free mode, so no Stripe needed yet) |
 | `RESEND_API_KEY` | `re_…` (A3) |
 | `EMAIL_FROM` | `Coach Line <onboarding@resend.dev>` |
 | `APP_SECRET` | random string #1 (A4) |
@@ -77,13 +81,12 @@ The yellow box should say **"Test mode is ON."**
 ### A8. Test it as both people: 5 minutes
 1. On the **Launch** page, fill in **"Test it as the coach"** (your name and email) → **Create my test school**.
 2. On your phone, open your site → type **Test University** → pick it → **Write my message**.
-3. Fill it in **as the parent**, using your own email. At checkout, use card `4242 4242 4242 4242`, any future date, any CVC.
+3. Fill it in **as the parent**, using your own email, and tap **Send**. With payments off there's no card step.
 4. Check your Gmail. You'll get:
    * **Parent emails**, like "Sent!"
    * **The coach email**, starting `[TEST → …] … asked about Athlete Market Test University`. That one is your coach view.
 5. In the coach email, tap **Invite to camp** → **Send answer**.
 6. Check Gmail again for **"Coach … answered Taylor 🎉"**. That's the parent's view of the answer.
-7. In Stripe (Test mode) → **Payments**, the $20 shows as **Succeeded**.
 
 That's the full loop. Try the other buttons too, like "Better fit elsewhere" and "Pass it on".
 
@@ -107,3 +110,15 @@ Do these in order. The 🚀 **Launch** page in your admin shows which ones are d
 7. In admin → **🚀 Launch** → **Hide test school**.
 8. **One real $20 test:** message a school with your own real card, answer it from the coach email, then refund yourself
    in Stripe. If that works, you're live.
+
+---
+
+## Turn on payments (when you're ready for the paywall)
+
+1. Do **A2** (Stripe in Test mode) and **A6** (webhook).
+2. In Vercel: add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, **delete `PAYMENTS_OFF`**, then **Redeploy**.
+3. Check **Admin → 🚀 Launch**: "Payments (Stripe)" should say **TEST mode**.
+4. Test once with card `4242 4242 4242 4242`. Prices come from **Admin → Settings** ($20 / $49 / $69, with the coach getting 50%).
+5. When that works, switch Stripe to live keys (Phase B, step 5).
+
+Coaches who answered during the free period get their first paid message with the "$10 for answering" line automatically.

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { paymentsOff } from "@/lib/env";
 import { getDeps } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export default async function SentPage({ searchParams }: { searchParams: Promise
       <ol className="mx-auto mt-8 max-w-sm space-y-3 text-left text-sm">
         <Step n={1}>The right coach on each staff gets your message with one-tap answers.</Step>
         <Step n={2}>No answer in {settings.escalate_after_hours} hours? It moves to the next coach on staff.</Step>
-        <Step n={3}>You&apos;re only charged for schools that answer. Reply to the answer email to keep talking.</Step>
+        <Step n={3}>{paymentsOff() ? "Reply to the answer email (or text) to keep the conversation going." : "You're only charged for schools that answer. Reply to the answer email to keep talking."}</Step>
       </ol>
       <Link href="/ask" className="btn-primary mt-10">Ask more schools</Link>
     </div>

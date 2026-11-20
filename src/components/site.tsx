@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { paymentsOff } from "@/lib/env";
 import { DISCLAIMER } from "@/lib/constants";
 import { Logo } from "./ui";
 
@@ -34,7 +35,7 @@ export function SiteFooter() {
         <div className="space-y-2 text-sm">
           <p className="font-semibold text-white">Families</p>
           <Link className="block text-white/60 hover:text-white" href="/ask">Message a college</Link>
-          <Link className="block text-white/60 hover:text-white" href="/coaches">Film evaluations</Link>
+          {!paymentsOff() && <Link className="block text-white/60 hover:text-white" href="/coaches">Film evaluations</Link>}
           <Link className="block text-white/60 hover:text-white" href="/#faq">FAQ</Link>
           <a className="block text-white/60 hover:text-white" href={MAIN}>The Athlete Market</a>
         </div>

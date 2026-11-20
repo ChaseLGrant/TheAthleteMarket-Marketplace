@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Recorder } from "@/components/recorder";
 import { Notice, Stars } from "@/components/ui";
-import { env } from "@/lib/env";
+import { env, paymentsOff } from "@/lib/env";
 import { dateOnly, money } from "@/lib/format";
 import { prettyPhone, toE164 } from "@/lib/phone";
 import { resolvePayoutsLink } from "@/lib/services/access";
@@ -181,8 +181,8 @@ export default async function CoachHub({ params, searchParams }: P) {
         })}
       </section>
 
-      {/* Payouts */}
-      <section className="card space-y-4 p-5">
+      {/* Payouts (hidden while payments are off — nothing to pay out yet) */}
+      {!paymentsOff() && <section className="card space-y-4 p-5">
         <h2 className="font-semibold">Payouts</h2>
         {ready ? (
           <Notice tone="success" title="You're all set">Every delivered evaluation pays you automatically. Bank timing follows Stripe&apos;s payout schedule.</Notice>
@@ -197,7 +197,7 @@ export default async function CoachHub({ params, searchParams }: P) {
         <form action={continueToStripe}>
           <button className={ready ? "btn-ghost w-full" : "btn-primary w-full"}>{ready ? "Open my Stripe payouts dashboard" : coach.stripe_account_id ? "Continue Stripe setup" : "Set up payouts with Stripe (3 min)"}</button>
         </form>
-      </section>
+      </section>}
 
       {/* Intro video */}
       <section className="card space-y-4 p-5">

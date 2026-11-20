@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { paymentsOff } from "@/lib/env";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar, InviteBadge, JoinedBadge, Notice, PriceLabel, Stars } from "@/components/ui";
@@ -99,9 +100,9 @@ export default async function CoachPage({ params, searchParams }: P) {
               <Link href={`/ask?coach=${encodeURIComponent(coach.slug)}`} className="btn-primary mt-5 w-full">
                 Message {first} on Coach Line
               </Link>
-              <Link href={`/coaches/${coach.slug}/request${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-ghost mt-2 w-full">
+              {!paymentsOff() && <Link href={`/coaches/${coach.slug}/request${from ? `?from=${encodeURIComponent(from)}` : ""}`} className="btn-ghost mt-2 w-full">
                 Get a film evaluation
-              </Link>
+              </Link>}
               <p className="mt-3 text-center text-xs text-subtle">Feedback only — not a recruiting offer.</p>
             </div>
           ) : (

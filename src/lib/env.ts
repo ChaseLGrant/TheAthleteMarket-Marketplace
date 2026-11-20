@@ -25,6 +25,17 @@ export function isDemoMode(): boolean {
   return on;
 }
 
+/**
+ * Payments off: no Stripe, no card step, nothing charged, coaches aren't promised money.
+ * On when PAYMENTS_OFF=1, or (on a real deployment) when no Stripe key has been added yet.
+ */
+export function paymentsOff(): boolean {
+  const flag = process.env.PAYMENTS_OFF;
+  if (flag === "1" || flag === "true") return true;
+  if (flag === "0" || flag === "false") return false;
+  return !isDemoMode() && !process.env.STRIPE_SECRET_KEY?.trim();
+}
+
 export const env = {
   siteUrl: () => (opt("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
   mainSiteUrl: () => opt("NEXT_PUBLIC_MAIN_SITE_URL") ?? "https://theathletemarket.com",

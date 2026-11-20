@@ -1,7 +1,7 @@
 import { AdminForm } from "@/components/admin-ui";
 import { Notice } from "@/components/ui";
 import { SPORTS } from "@/lib/constants";
-import { env, isDemoMode } from "@/lib/env";
+import { env, isDemoMode, paymentsOff } from "@/lib/env";
 import { getDeps } from "@/lib/server";
 import { createTestSchool, removeTestSchool } from "../../actions";
 
@@ -24,8 +24,8 @@ export default async function Launch() {
   const checks: Check[] = [
     { label: "Website address", ok: !site.includes("localhost"), detail: site, fix: "Vercel → Settings → Environment Variables → NEXT_PUBLIC_SITE_URL = your site's https address, then Redeploy." },
     { label: "Database (Supabase)", ok: isDemoMode() ? "warn" : dbOk, detail: isDemoMode() ? "Demo mode — using a temporary in-memory database" : dbOk ? "Connected to the marketplace schema" : dbErr, fix: "Run supabase/setup.sql, add 'marketplace' to Exposed schemas, and set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY." },
-    { label: "Payments (Stripe)", ok: stripeMode === "live" ? true : stripeMode === "test" ? "warn" : false, detail: stripeMode === "live" ? "LIVE — real cards are charged" : stripeMode === "test" ? "TEST mode — use card 4242 4242 4242 4242, nothing is really charged" : "No Stripe key", fix: "Stripe → Developers → API keys → STRIPE_SECRET_KEY." },
-    { label: "Stripe webhook", ok: has("STRIPE_WEBHOOK_SECRET"), detail: has("STRIPE_WEBHOOK_SECRET") ? "Set" : "Missing — orders won't be sent after checkout", fix: `Stripe → Developers → Webhooks → Add endpoint: ${site}/api/stripe/webhook → copy the signing secret → STRIPE_WEBHOOK_SECRET.` },
+    { label: "Payments (Stripe)", ok: paymentsOff() ? "warn" : stripeMode === "live" ? true : stripeMode === "test" ? "warn" : false, detail: paymentsOff() ? "OFF — messages are free, no card step, coaches aren't paid. Add the Stripe key when you're ready to charge." : stripeMode === "live" ? "LIVE — real cards are charged" : stripeMode === "test" ? "TEST mode — use card 4242 4242 4242 4242, nothing is really charged" : "No Stripe key", fix: "Stripe → Developers → API keys → STRIPE_SECRET_KEY." },
+    { label: "Stripe webhook", ok: paymentsOff() ? "warn" : has("STRIPE_WEBHOOK_SECRET"), detail: paymentsOff() ? "Not needed while payments are off" : has("STRIPE_WEBHOOK_SECRET") ? "Set" : "Missing — orders won't be sent after checkout", fix: `Stripe → Developers → Webhooks → Add endpoint: ${site}/api/stripe/webhook → copy the signing secret → STRIPE_WEBHOOK_SECRET.` },
     { label: "Email sending (Resend)", ok: has("RESEND_API_KEY"), detail: has("RESEND_API_KEY") ? `Sending as ${from}` : "No Resend key — no emails will go out", fix: "Resend → API Keys → Create → RESEND_API_KEY." },
     { label: "Your own email domain", ok: from.includes("resend.dev") ? "warn" : has("RESEND_API_KEY"), detail: from.includes("resend.dev") ? "Using Resend's test sender — can only email YOUR address. Fine for testing." : "Using your domain (must be verified in Resend)", fix: "Resend → Domains → add theathletemarket.com → add the DNS records it shows → EMAIL_FROM = Coach Line <line@theathletemarket.com>." },
     { label: "Texts (Twilio)", ok: env.twilio() ? true : "warn", detail: env.twilio() ? "Connected" : "Optional — email still works without it", fix: "TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE_SID." },

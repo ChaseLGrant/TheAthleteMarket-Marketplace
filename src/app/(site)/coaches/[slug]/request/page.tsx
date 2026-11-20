@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { paymentsOff } from "@/lib/env";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { RequestForm } from "@/components/request-form";
 import { Avatar, InviteBadge, JoinedBadge, Notice } from "@/components/ui";
 import { availabilityLabel, familyChoosesOffer, paidRequestGate, resolvePrice } from "@/lib/compliance";
@@ -19,6 +20,7 @@ export default async function RequestPage({ params, searchParams }: P) {
   const deps = await getDeps();
   const coach = await deps.store.getCoachBySlug(slug);
   if (!coach || coach.removed) notFound();
+  if (paymentsOff()) redirect(`/ask?coach=${encodeURIComponent(coach.slug)}`); // film evaluations need payments
   const settings = await deps.store.getSettings();
   const gate = paidRequestGate(coach, settings);
   if (!(await isBot())) deps.store.track("form_view", coach.id).catch(() => {});

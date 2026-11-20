@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Deps } from "../deps";
-import { env } from "../env";
+import { env, paymentsOff } from "../env";
 import { paidRequestGate } from "../compliance";
 import {
   coachAskInvite, draftConfirmFirstTime, draftConfirmYes, lineSms, orderReceipt, relayMessage,
@@ -54,6 +54,13 @@ export async function buildChain(deps: Deps, a: { coach?: Coach | null; school?:
 export { askPricing } from "../ask-pricing";
 import { askPricing } from "../ask-pricing";
 
+/** Coach Line prices in effect: all $0 while payments are off. */
+export function askPrices(settings: { ask_prices: Record<string, number> }): Record<string, number> {
+  return paymentsOff() ? { "1": 0, "3": 0, "5": 0 } : settings.ask_prices;
+}
+/** A saved "card" from payments-off mode isn't a real card once payments are on. */
+const hasRealCard = (p: { stripe_customer_id: string } | null) => !!p && (paymentsOff() || !p.stripe_customer_id.startsWith("free"));
+
 export interface AskTarget { coachSlug?: string | null; school?: string | null; sport?: string | null }
 export interface AskInput {
   targets: AskTarget[];
@@ -88,7 +95,7 @@ export async function createAskOrder(deps: Deps, input: AskInput, ctx: { ip: str
     if (chains.some((c) => c.school === school && c.sport === chain[0]!.sport)) continue; // duplicate school
     chains.push({ chain, school, sport: chain[0]!.sport });
   }
-  const pricing = askPricing(settings.ask_prices, chains.length);
+  const pricing = askPricing(askPrices(settings), chains.length);
   const now = deps.now();
   const phone = toE164(input.purchaserPhone);
   const order = await store.insertOrder({
@@ -121,6 +128,11 @@ export async function createAskOrder(deps: Deps, input: AskInput, ctx: { ip: str
     successUrl: `${site}/ask/sent?order=${order.ref}`, cancelUrl: `${site}/ask?cancelled=1`,
   });
   await store.updateOrder(order.id, { stripe_checkout_session_id: session.id, stripe_customer_id: session.customerId });
+  if (paymentsOff()) {
+    // No card step: send it now and go straight to the "Sent" page.
+    await handleAskSetupCompleted(deps, session.id);
+    return { url: `${site}/ask/sent?order=${order.ref}`, orderId: order.id };
+  }
   return { url: session.url, orderId: order.id };
 }
 
@@ -150,7 +162,7 @@ export async function handleAskSetupCompleted(deps: Deps, sessionId: string) {
       template: "ask_receipt", idempotencyKey: `ask-receipt-${order.id}`, requestId: first.id,
     }).catch((e) => log("warn", "ask receipt failed", { error: String(e) }));
     if (first.purchaser_phone && first.purchaser_sms_opt_in_at)
-      await sendSms(deps, { to: first.purchaser_phone, body: lineSms.parentSent(sent.length, sent[0]!.school), template: "parent_sent", dedupeKey: `ask-sent-${order.id}`, requestId: first.id });
+      await sendSms(deps, { to: first.purchaser_phone, body: lineSms.parentSent(sent.length, sent[0]!.school, sent.every((x) => x.price === 0)), template: "parent_sent", dedupeKey: `ask-sent-${order.id}`, requestId: first.id });
   }
 }
 
@@ -350,7 +362,7 @@ export async function escalateAsks(deps: Deps): Promise<number> {
     await deps.store.addEvent({ request_id: r.id, type: "escalated", actor: "cron", from_status: null, to_status: null, data: { to: next.full_name } });
     await sendAskInvite(deps, e, next, { escalated: true, key: `ask-esc-${r.id}-${nextIdx}` }).catch((err) => log("warn", "escalation email failed", { error: String(err) }));
     if (e.purchaser_phone && e.purchaser_sms_opt_in_at)
-      await sendSms(deps, { to: e.purchaser_phone, body: lineSms.parentEscalated(e.target_school ?? "the school", next.full_name), template: "parent_escalated", dedupeKey: `parent-esc-${r.id}-${nextIdx}`, requestId: r.id });
+      await sendSms(deps, { to: e.purchaser_phone, body: lineSms.parentEscalated(e.target_school ?? "the school", next.full_name, e.price_cents === 0), template: "parent_escalated", dedupeKey: `parent-esc-${r.id}-${nextIdx}`, requestId: r.id });
     n++;
   }
   return n;
@@ -477,8 +489,8 @@ export async function handleParentEmail(deps: Deps, a: { from: string; subject: 
     from_email: a.from.toLowerCase(), target_school: school, target_sport: sport,
     coach_id: a.target.kind === "coach" ? a.target.coach.id : null, subject: a.subject.slice(0, 200), message: a.body.slice(0, 2000), film_url: film,
   });
-  const price = askPricing(settings.ask_prices, 1).total;
-  if (payer && payer.athlete_name && film) {
+  const price = askPricing(askPrices(settings), 1).total;
+  if (payer && hasRealCard(payer) && payer.athlete_name && film) {
     await sendEmail(deps, {
       to: a.from, rendered: draftConfirmYes({ school, priceCents: price, athlete: payer.athlete_name, postalAddress: env.postalAddress() }),
       template: "draft_yes", idempotencyKey: `draft-yes-${draft.id}`, replyTo: draftAddress(draft),
@@ -505,12 +517,12 @@ export async function confirmDraftByEmail(deps: Deps, draft: AskDraft, body: str
   if (draft.status !== "pending") return "already";
   if (!/^\s*(yes|y|yep|yeah|send|send it|confirm)\b/i.test(body)) return "not_yes";
   const payer = await deps.store.getSavedPayer(draft.from_email);
-  if (!payer?.athlete_name) return "no_card";
+  if (!payer?.athlete_name || !hasRealCard(payer)) return "no_card";
   const settings = await deps.store.getSettings();
   const coach = draft.coach_id ? await deps.store.getCoach(draft.coach_id) : null;
   const chain = await buildChain(deps, { coach, school: draft.target_school, sport: draft.target_sport });
   if (!chain.length) return "unreachable";
-  const price = askPricing(settings.ask_prices, 1).total;
+  const price = askPricing(askPrices(settings), 1).total;
   const pb = priceBreakdown(price, { commission_bps: 10_000 - settings.ask_coach_share_bps });
   const now = deps.now();
   const order = await deps.store.insertOrder({ ref: randomRef(), stripe_checkout_session_id: null, purchaser_email: draft.from_email, total_cents: price, school_count: 1 });

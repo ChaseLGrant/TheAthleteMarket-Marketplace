@@ -1,4 +1,4 @@
-import { isDemoMode } from "./env";
+import { isDemoMode, paymentsOff } from "./env";
 import type { Mailer, Payments, Sms, VideoStorage } from "./integrations";
 import type { Store } from "./store";
 
@@ -35,7 +35,8 @@ export async function getDemo(): Promise<DemoBundle> {
       const bundle: DemoBundle = {
         clockOffsetMs: 0,
         store,
-        payments: new demo.FakePayments(),
+        // PAYMENTS_OFF=1 in demo exercises the free flow (no card step) end to end.
+        payments: (paymentsOff() ? new (await import("./integrations-free")).FreePayments() : new demo.FakePayments()) as InstanceType<typeof demo.FakePayments>,
         mailer: new demo.FakeMailer(),
         storage: new demo.FakeVideoStorage(),
         sms: new demo.FakeSms(),
@@ -44,7 +45,7 @@ export async function getDemo(): Promise<DemoBundle> {
       // Demo coaches have already finished payout setup (as real coaches will, at sign-up),
       // and videos are delivered instantly so the demo can be clicked straight through.
       await store.updateSettings({ require_admin_review: false });
-      for (const c of await store.listParticipatingCoaches()) {
+      for (const c of paymentsOff() ? [] : await store.listParticipatingCoaches()) {
         const { id } = await bundle.payments.createConnectAccount({ coachId: c.id, email: c.email ?? "", name: c.full_name });
         bundle.payments.completeOnboarding(id);
         await store.updateCoach(c.id, { stripe_account_id: id, stripe_transfers_active: true, stripe_details_submitted: true, stripe_payouts_enabled: true });
@@ -61,7 +62,7 @@ export async function getDeps(): Promise<Deps> {
     const [{ SupabaseStore }, live] = await Promise.all([import("./store-supabase"), import("./integrations-live")]);
     g.__tamLive = {
       store: new SupabaseStore(),
-      payments: new live.StripePayments(),
+      payments: paymentsOff() ? new (await import("./integrations-free")).FreePayments() : new live.StripePayments(),
       mailer: new live.ResendMailer(),
       storage: new live.SupabaseVideoStorage(),
       sms: new live.TwilioSms(),

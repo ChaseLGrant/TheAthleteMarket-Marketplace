@@ -47,7 +47,9 @@ describe("pricing", () => {
     expect(b.coach_payout_cents).toBe(4000);
   });
   it("rejects invalid prices", () => {
-    expect(() => priceBreakdown(0, { commission_bps: 0 })).toThrow();
+    expect(() => priceBreakdown(-100, { commission_bps: 0 })).toThrow();
+    expect(() => priceBreakdown(19.5, { commission_bps: 0 })).toThrow();
+    expect(priceBreakdown(0, { commission_bps: 2000 }).coach_payout_cents).toBe(0); // free (payments off)
   });
 });
 

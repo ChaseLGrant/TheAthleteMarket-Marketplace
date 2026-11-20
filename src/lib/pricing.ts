@@ -18,7 +18,7 @@ export function estimateStripeFee(amountCents: number): number {
  * (so at 0% commission during the pilot, the platform's net per evaluation is negative).
  */
 export function priceBreakdown(priceCents: number, settings: Pick<Settings, "commission_bps">): PriceBreakdown {
-  if (!Number.isInteger(priceCents) || priceCents <= 0) throw new Error("Invalid price");
+  if (!Number.isInteger(priceCents) || priceCents < 0) throw new Error("Invalid price"); // 0 = free (payments off)
   const platform_fee_cents = Math.round((priceCents * settings.commission_bps) / 10_000);
   const coach_payout_cents = priceCents - platform_fee_cents;
   const estimated_stripe_fee_cents = estimateStripeFee(priceCents);

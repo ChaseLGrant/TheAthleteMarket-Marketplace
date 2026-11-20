@@ -19,7 +19,7 @@ const dollars = (c: number) => "$" + (c % 100 ? (c / 100).toFixed(2) : c / 100);
 
 export function AskForm(p: {
   prices: Record<string, number>; escalateHours: number; deadlineDays: number;
-  initialTargets?: Target[]; prefill?: Record<string, string>; draftToken?: string;
+  initialTargets?: Target[]; prefill?: Record<string, string>; draftToken?: string; free?: boolean;
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(submitAsk, {});
   const v = state.values ?? p.prefill ?? {};
@@ -155,16 +155,18 @@ export function AskForm(p: {
       </fieldset>
 
       <div className="space-y-3">
-        <div className="flex items-baseline justify-between rounded-2xl border border-line px-4 py-3">
+        {!p.free && <div className="flex items-baseline justify-between rounded-2xl border border-line px-4 py-3">
           <span className="text-sm text-muted">{n || 1} school{n === 1 || !n ? "" : "s"}{n >= 3 ? <span className="ml-2 rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success">save {dollars(single * n - price.total)}</span> : null}</span>
           <span className="text-xl font-bold">{dollars(price.total)}</span>
-        </div>
+        </div>}
         <button className="btn-primary w-full text-[17px]" disabled={pending || !n}>
-          {pending ? "Opening secure checkout…" : n ? `Send to ${n} school${n === 1 ? "" : "s"} · ${dollars(price.total)}` : "Pick a school to continue"}
+          {pending ? (p.free ? "Sending…" : "Opening secure checkout…") : n ? `Send to ${n} school${n === 1 ? "" : "s"}${p.free ? "" : ` · ${dollars(price.total)}`}` : "Pick a school to continue"}
         </button>
-        <p className="text-center text-xs leading-relaxed text-muted">
+        {p.free ? (
+          <p className="text-center text-xs leading-relaxed text-muted">We&apos;ll email{phone.trim() ? " and text" : ""} you the moment a coach opens it and the moment they answer.</p>
+        ) : <p className="text-center text-xs leading-relaxed text-muted">
           <strong>Answered or it&apos;s free.</strong> We save your card and only charge each school when a coach there answers. No answer in {p.deadlineDays} days = $0 for that school.
-        </p>
+        </p>}
       </div>
     </form>
   );

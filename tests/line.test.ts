@@ -139,6 +139,8 @@ describe("asking", () => {
     expect(deps.payments.captures).toHaveLength(0);
     const rel = mails(deps, "morgan@example.com").find((m) => m.subject.startsWith("You weren't charged"))!;
     expect(rel.html).toContain("No one on the Example University staff answered in time");
+    expect(rel.html).toContain("/ask?from="); // "ask another school", not the film-evaluation page
+    expect(texts(deps, "+15552223333").some((t) => /NOT charged\. Ask another school.*\/ask\?from=/.test(t))).toBe(true);
   });
 });
 

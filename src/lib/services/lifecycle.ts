@@ -673,13 +673,15 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
       // Revoke any delivery link. The coach link stays valid so it can show a friendly "closed" page;
       // every coach action re-checks status, so it can no longer submit or trigger payment.
       const rotated = (await deps.store.casRequest(req.id, {}, { delivery_link_nonce: randomUUID().replace(/-/g, "") })) ?? done;
+      // Coach Line: "try again" means asking another school, not a film evaluation.
+      const retry = rotated.format === "ask" ? (await import("./line")).askAnotherUrl(rotated) : secondOpinionUrl(rotated);
       try {
         const coach = (await deps.store.getCoach(done.coach_id))!;
         await sendEmail(deps, {
           to: done.purchaser_email,
           rendered: purchaserRefunded({
             req: rotated, coach, why, captured, postalAddress: env.postalAddress(),
-            retryUrl: why === "admin" ? undefined : secondOpinionUrl(rotated),
+            retryUrl: why === "admin" ? undefined : retry,
           }),
           template: "purchaser_refunded",
           idempotencyKey: `refund-email-${done.id}`,
@@ -688,7 +690,19 @@ export async function refundRequest(deps: Deps, requestId: string, why: RefundWh
       } catch (e) {
         log("error", "refund email failed", { request_id: req.id, error: errMsg(e) });
       }
-      if (!captured && why !== "admin") await textParent(deps, rotated, "released", secondOpinionUrl(rotated)).catch(() => {});
+      if (!captured && why !== "admin") {
+        if (rotated.format === "ask") {
+          if (rotated.purchaser_phone && rotated.purchaser_sms_opt_in_at) {
+            const school = rotated.target_school ?? "that school";
+            await sendSms(deps, {
+              to: rotated.purchaser_phone, template: "parent_released", dedupeKey: `parent-released-${rotated.id}`, requestId: rotated.id,
+              body: rotated.price_cents > 0
+                ? `The Athlete Market: no answer from ${school} in time — you were NOT charged. Ask another school (details saved): ${retry}`
+                : `The Athlete Market: no answer from ${school} this time. Ask another school (details saved): ${retry}`,
+            }).catch(() => {});
+          }
+        } else await textParent(deps, rotated, "released", retry).catch(() => {});
+      }
     }
   } catch (e) {
     await deps.store.casRequest(req.id, { refund_status: ["processing"] }, { refund_status: "failed", last_error: `refund: ${errMsg(e)}` });

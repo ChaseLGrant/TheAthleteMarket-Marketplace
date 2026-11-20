@@ -344,6 +344,19 @@ export function purchaserRefunded(a: {
         : a.why === "unavailable"
           ? `${esc(coach.full_name)} is no longer accepting requests.`
           : `Your request was cancelled.`;
+  if (!a.captured && req.format === "ask" && req.price_cents === 0) {
+    const school = req.target_school ?? coach.school ?? "that school";
+    const html = layout({
+      preheader: `No answer from ${school} this time.`,
+      heading: `No answer from ${school} this time`,
+      bodyHtml: p(`${reason} Coaches get busy — the best move is to reach a few more programs.`) +
+        p(`Your athlete's details are saved, so it takes 30 seconds.`),
+      cta: a.retryUrl ? { label: "Ask another school", url: a.retryUrl } : undefined,
+      footerHtml: `Reference ${esc(req.ref)}.`,
+      postalAddress: a.postalAddress,
+    });
+    return { subject: `No answer from ${school} — try another school`, html, text: `${reason.replace(/<[^>]+>/g, "")} Ask another school: ${a.retryUrl ?? ""}\n${a.postalAddress}` };
+  }
   if (!a.captured) {
     const html = layout({
       preheader: `You were not charged. We've released the ${money(req.price_cents)} hold on your card.`,
@@ -538,19 +551,22 @@ export function relayMessage(a: { toRole: "coach" | "parent"; fromName: string; 
 }
 
 export function orderReceipt(a: { email: string; name: string; athlete: string; schools: { school: string; price: number }[]; postalAddress: string }): Rendered {
-  const rows = a.schools.map((s) => row(esc(s.school), `${money(s.price)} <span style="font-weight:400;color:${MUTED};">hold</span>`));
+  const free = a.schools.every((s) => s.price === 0);
+  const rows = a.schools.map((s) => row(esc(s.school), free ? "Sent ✓" : `${money(s.price)} <span style="font-weight:400;color:${MUTED};">hold</span>`));
   const html = layout({
-    preheader: "Your message is on its way. You're only charged for schools that answer.",
+    preheader: free ? "Your message is on its way." : "Your message is on its way. You're only charged for schools that answer.",
     heading: "Your message is on its way",
     bodyHtml:
       p(`We're delivering your message about <strong>${esc(a.athlete)}</strong> to ${a.schools.length === 1 ? "this coaching staff" : `these ${a.schools.length} coaching staffs`}:`) +
       table(rows) +
-      p(`<strong>Answered — or it's free.</strong> Each school is charged only if a coach there answers. If the first coach doesn't, we automatically reach the next person on that staff. No answer in 5 days? That hold is released.`) +
+      p(free
+        ? `If the first coach doesn't answer, we automatically reach the next person on that staff.`
+        : `<strong>Answered — or it's free.</strong> Each school is charged only if a coach there answers. If the first coach doesn't, we automatically reach the next person on that staff. No answer in 5 days? That hold is released.`) +
       p(`We'll text and email you the moment someone answers.`),
     footerHtml: `Questions? Reply to this email.`,
     postalAddress: a.postalAddress,
   });
-  return { subject: `Sent! ${a.schools.length === 1 ? a.schools[0]!.school : `${a.schools.length} schools`} — we'll tell you when they answer`, html, text: `Your message about ${a.athlete} is on its way to ${a.schools.map((s) => s.school).join(", ")}. Only charged for schools that answer.\n${a.postalAddress}` };
+  return { subject: `Sent! ${a.schools.length === 1 ? a.schools[0]!.school : `${a.schools.length} schools`} — we'll tell you when they answer`, html, text: `Your message about ${a.athlete} is on its way to ${a.schools.map((s) => s.school).join(", ")}.${free ? "" : " Only charged for schools that answer."}\n${a.postalAddress}` };
 }
 
 /** Gmail railway — first-time sender: confirm + add a card once. */
@@ -559,12 +575,12 @@ export function draftConfirmFirstTime(a: { school: string; priceCents: number; c
     preheader: `One tap to send your message to ${a.school}.`,
     heading: `Got it — one tap to send to ${a.school}`,
     bodyHtml:
-      p(`We received your message for the <strong>${esc(a.school)}</strong> coaching staff. Tap below to add your athlete's details and confirm — <strong>${money(a.priceCents)}, charged only if a coach answers</strong>.`) +
+      p(`We received your message for the <strong>${esc(a.school)}</strong> coaching staff. Tap below to add your athlete's details and confirm${a.priceCents > 0 ? ` — <strong>${money(a.priceCents)}, charged only if a coach answers</strong>` : ""}.`) +
       p(`<span style="font-size:13px;color:${MUTED};">Next time it's even easier: email any school and just reply YES.</span>`),
     cta: { label: "Confirm & send", url: a.confirmUrl },
     postalAddress: a.postalAddress,
   });
-  return { subject: `Confirm: your message to ${a.school}`, html, text: `Confirm and send your message to ${a.school} (${money(a.priceCents)}, only if answered): ${a.confirmUrl}\n${a.postalAddress}` };
+  return { subject: `Confirm: your message to ${a.school}`, html, text: `Confirm and send your message to ${a.school}${a.priceCents > 0 ? ` (${money(a.priceCents)}, only if answered)` : ""}: ${a.confirmUrl}\n${a.postalAddress}` };
 }
 
 /** Gmail railway — returning sender: reply YES to send (card on file). */
@@ -574,19 +590,19 @@ export function draftConfirmYes(a: { school: string; priceCents: number; athlete
     heading: `Reply YES to send`,
     bodyHtml:
       p(`Ready to send your message about <strong>${esc(a.athlete)}</strong> to the <strong>${esc(a.school)}</strong> coaching staff.`) +
-      p(`<strong>Just reply YES.</strong> We'll place a ${money(a.priceCents)} hold on your saved card — charged only if a coach answers.`),
+      p(a.priceCents > 0 ? `<strong>Just reply YES.</strong> We'll place a ${money(a.priceCents)} hold on your saved card — charged only if a coach answers.` : `<strong>Just reply YES</strong> and we'll send it.`),
     postalAddress: a.postalAddress,
   });
-  return { subject: `Reply YES to send to ${a.school}`, html, text: `Reply YES to send your message about ${a.athlete} to ${a.school} (${money(a.priceCents)} hold, only charged if answered).\n${a.postalAddress}` };
+  return { subject: `Reply YES to send to ${a.school}`, html, text: `Reply YES to send your message about ${a.athlete} to ${a.school}${a.priceCents > 0 ? ` (${money(a.priceCents)} hold, only charged if answered)` : ""}.\n${a.postalAddress}` };
 }
 
 export const lineSms = {
   coachAsk: (req: EvalRequest, url: string, earnCents: number) =>
     `The Athlete Market: ${req.athlete_name} (${req.grad_year} ${req.position}) asked about your program${earnCents > 0 ? ` — ${money(earnCents)} for answering` : ""}. Answer in one tap: ${url} Reply STOP to opt out.`,
-  parentSent: (n: number, school: string) =>
-    `The Athlete Market: your message is on its way to ${n === 1 ? school : `${n} schools`}. We'll text you the moment a coach answers. You're only charged if they do. Reply STOP to opt out.`,
+  parentSent: (n: number, school: string, free = false) =>
+    `The Athlete Market: your message is on its way to ${n === 1 ? school : `${n} schools`}. We'll text you the moment a coach answers.${free ? "" : " You're only charged if they do."} Reply STOP to opt out.`,
   parentOpened: (coachName: string) => `The Athlete Market: ${coachName} just opened your message 👀`,
-  parentEscalated: (school: string, nextName: string) => `The Athlete Market: no answer yet from ${school} — we've also sent your message to ${nextName}. Still only charged if someone answers.`,
+  parentEscalated: (school: string, nextName: string, free = false) => `The Athlete Market: no answer yet from ${school} — we've also sent your message to ${nextName}.${free ? "" : " Still only charged if someone answers."}`,
   parentAnswered: (coachName: string, school: string, summary: string) =>
     `The Athlete Market: ${coachName} (${school}) answered! ${summary} Full details in your email. Reply to this text to respond.`,
   relayToParent: (coachName: string, body: string) => `${coachName}: ${body.slice(0, 280)}${body.length > 280 ? "…" : ""} (reply here to respond)`,

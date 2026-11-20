@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HeroAsk } from "@/components/hero-ask";
 import { askPricing } from "@/lib/ask-pricing";
+import { paymentsOff } from "@/lib/env";
 import { money } from "@/lib/format";
 import { getDeps } from "@/lib/server";
 
@@ -18,7 +19,7 @@ const ANSWERS = [
   { icon: "🎯", label: "Honest level read", title: "Better fit at D2 right now", meta: "“Footwork is there — add 10 lbs.”", cta: "Know where to aim" },
 ];
 
-const FAQ = [
+const PAID_FAQ = [
   { q: "What if no one answers?", a: "Then that school is free. We save your card at checkout and only charge each school when a coach there actually answers. No answer in 5 days = $0 for that school." },
   { q: "Who gets my message?", a: "We route it to the right person on that staff — usually the recruiting coordinator or an assistant. If they don't answer within 48 hours, it automatically goes to the next coach. The first coach to answer is the one you hear from." },
   { q: "Why would a coach answer?", a: "They get paid to — every answer earns them money, and answering takes one tap: share camp dates, an event they'll be at, or their honest read. No logins, no apps." },
@@ -28,9 +29,18 @@ const FAQ = [
   { q: "Is an answer a recruiting offer?", a: "No. It's a coach's reply to your question — camp info, events, film feedback or fit — not an offer, scholarship or roster spot." },
 ];
 
+const FREE_FAQ = [
+  { q: "What if no one answers?", a: "If the first coach doesn't answer within 48 hours, we automatically send it to the next coach on that staff. If no one answers by the deadline, we let you know so you can reach more programs." },
+  { q: "Who gets my message?", a: "We route it to the right person on that staff — usually the recruiting coordinator or an assistant. If they don't answer within 48 hours, it goes to the next coach. The first coach to answer is the one you hear from." },
+  { q: "Why would a coach answer?", a: "Because it takes one tap. Every message arrives with the film, grad year and position, and the coach can answer with their camp dates, an event they'll be at, or their honest read — no logins, no apps." },
+  ...PAID_FAQ.slice(3),
+];
+
 export default async function Home() {
   const deps = await getDeps();
   const settings = await deps.store.getSettings();
+  const free = paymentsOff();
+  const FAQ = free ? FREE_FAQ : PAID_FAQ;
   const packs = [1, 3, 5].map((n) => ({ n, total: askPricing(settings.ask_prices, n).total }));
   const coachEarns = Math.round((packs[0]!.total * settings.ask_coach_share_bps) / 10_000);
 
@@ -43,14 +53,14 @@ export default async function Home() {
         <img src="/brand/logo-white.png" alt="" aria-hidden className="pointer-events-none absolute -bottom-10 right-[-12%] w-[340px] opacity-[0.06] sm:right-[-2%] sm:w-[620px]" />
         <div className="container-page relative pb-20 pt-14 sm:pb-28 sm:pt-24">
           <p className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-[#BFD0FF] ring-1 ring-white/15">
-            Coach Line · Answered or it&apos;s free
+            {free ? "Coach Line · Now open" : "Coach Line · Answered or it's free"}
           </p>
           <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">The direct line to college coaches.</h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#C9D3EA]">
-            Ask any staff about camp dates, the events they&apos;ll be at, and what level you fit. Get a real answer — or pay nothing.
+            Ask any staff about camp dates, the events they&apos;ll be at, and what level you fit. {free ? "Get a real answer, fast." : "Get a real answer — or pay nothing."}
           </p>
           <div className="mt-8"><HeroAsk /></div>
-          <p className="mt-4 text-sm text-[#C9D3EA]">From {money(packs[0]!.total)} a school · {money(packs[2]!.total)} for 5 · no account, no app</p>
+          <p className="mt-4 text-sm text-[#C9D3EA]">{free ? "Up to 5 schools at once · no account, no app" : <>From {money(packs[0]!.total)} a school · {money(packs[2]!.total)} for 5 · no account, no app</>}</p>
         </div>
       </section>
 
@@ -86,6 +96,8 @@ export default async function Home() {
         </div>
       </section>
 
+      {!free && (
+        <>
       {/* Pricing */}
       <section id="pricing" className="container-page py-16">
         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Only pay for answers</h2>
@@ -101,6 +113,9 @@ export default async function Home() {
           ))}
         </div>
       </section>
+
+        </>
+      )}
 
       {/* Gmail */}
       <section className="container-page pb-16">
@@ -119,12 +134,12 @@ export default async function Home() {
       <section className="bg-navy text-white">
         <div className="container-page flex flex-col gap-6 py-14 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-bold tracking-tight">Coaches: get paid for the emails you already answer.</h2>
+            <h2 className="text-2xl font-bold tracking-tight">{free ? "Coaches: answer recruits in one tap." : "Coaches: get paid for the emails you already answer."}</h2>
             <p className="mt-2 max-w-xl text-[#C9D3EA]">
-              Every message comes with the film, grad year and position. Answer in one tap — camp dates, an event, your honest read — and earn {money(coachEarns)}+ per answer. Save your camps once; next time it&apos;s one tap.
+              Every message comes with the film, grad year and position. Answer in one tap — camp dates, an event, your honest read{free ? "" : <> — and earn {money(coachEarns)}+ per answer</>}. Save your camps once; next time it&apos;s one tap.
             </p>
           </div>
-          <Link href="/join" className="btn-primary shrink-0">Start getting paid</Link>
+          <Link href="/join" className="btn-primary shrink-0">{free ? "Save your camps" : "Start getting paid"}</Link>
         </div>
       </section>
 
@@ -142,9 +157,9 @@ export default async function Home() {
             </details>
           ))}
         </div>
-        <p className="mt-8 text-sm text-muted">
+        {!free && <p className="mt-8 text-sm text-muted">
           Want a full film breakdown instead? <Link href="/coaches" className="font-semibold text-blue">Get a written, voice or video evaluation →</Link>
-        </p>
+        </p>}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
