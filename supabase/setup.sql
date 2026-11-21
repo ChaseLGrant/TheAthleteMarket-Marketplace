@@ -563,8 +563,15 @@ create table if not exists saved_payers (
   athlete_grad_year int,
   athlete_position text,
   athlete_sport text,
+  athlete_film_url text,
   updated_at timestamptz not null default now()
 );
 alter table saved_payers enable row level security;
 grant all on all tables in schema marketplace to service_role;
+
+-- ===================== supabase/migrations/0009_free_messages.sql =====================
+-- Allow $0 messages (Coach Line with payments off). Negative prices are still rejected.
+set search_path = marketplace, public;
+alter table marketplace.requests drop constraint if exists requests_price_cents_check;
+alter table marketplace.requests add constraint requests_price_cents_check check (price_cents >= 0);
 
