@@ -545,7 +545,7 @@ export async function attemptPayout(deps: Deps, requestId: string): Promise<Eval
       try {
         await sendEmail(deps, {
           to: coach.email,
-          rendered: coachPayoutSetup({ coach, amountCents: req.coach_payout_cents, setupUrl: payoutsUrl(coach), postalAddress: env.postalAddress() }),
+          rendered: coachPayoutSetup({ coach, amountCents: req.coach_payout_cents, setupUrl: payoutsUrl(coach), postalAddress: env.postalAddress(), athlete: req.athlete_name }),
           template: "coach_payout_setup",
           idempotencyKey: `payout-setup-${req.id}`,
           requestId: req.id,

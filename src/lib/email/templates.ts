@@ -393,13 +393,14 @@ export function purchaserRefunded(a: {
   };
 }
 
-export function coachPayoutSetup(a: { coach: Coach; amountCents: number; setupUrl: string; postalAddress: string }): Rendered {
-  const subject = `Claim your ${money(a.amountCents)} — 3-minute payout setup`;
+export function coachPayoutSetup(a: { coach: Coach; amountCents: number; setupUrl: string; postalAddress: string; athlete?: string }): Rendered {
+  const subject = `Get paid for your answer — set up payouts`;
   const html = layout({
-    preheader: "Your video was delivered. Connect your bank via Stripe to get paid.",
-    heading: "Thanks — your video was delivered",
+    preheader: `You earned ${money(a.amountCents)}. Connect your bank with Stripe to get paid.`,
+    heading: `You earned ${money(a.amountCents)} — let's get it to you`,
     bodyHtml:
-      p(`The family has your evaluation. To receive <strong>${money(a.amountCents)}</strong>, complete a one-time secure payout setup with Stripe, our payments partner. Stripe collects your bank details and verifies your identity directly — The Athlete Market never sees your bank credentials.`) +
+      p(`Thanks, Coach. ${a.athlete ? `${esc(a.athlete)}'s family has your answer. ` : "The family has your answer. "}To receive <strong>${money(a.amountCents)}</strong>, do a one-time, 3-minute payout setup with Stripe, our payments partner. Stripe collects your bank details and verifies your identity directly — The Athlete Market never sees your bank credentials.`) +
+      p(`Your money is held safely until you finish, and every answer after that pays you automatically.`) +
       p(`<span style="font-size:13px;color:${MUTED};">Once Stripe verifies you, payment is sent automatically. Bank arrival timing follows Stripe's payout schedule (often 2 business days).</span>`),
     cta: { label: "Set up payouts", url: a.setupUrl },
     postalAddress: a.postalAddress,
@@ -509,35 +510,143 @@ export function answerCardHtml(req: EvalRequest, coach: Coach): string {
   }
 }
 
+/**
+ * The coach's answer, written as a personal note to the family: greeting, why it matters, concrete next steps,
+ * the coach's own words, and a sign-off. Built from the coach's one-tap answer + the family's details.
+ */
+export function personalAnswer(req: EvalRequest, coach: Coach): { paragraphs: string[]; steps: string[]; cta?: { label: string; url: string } } {
+  const pl = (req.answer_payload ?? {}) as Record<string, string>;
+  const kid = req.athlete_name.split(" ")[0]!;
+  const pos = req.position.length <= 4 ? req.position.toUpperCase() : req.position;
+  const profile = `a ${req.grad_year} ${pos}`;
+  const school = coach.school ?? (req.target_school !== coach.full_name ? req.target_school : null);
+  const program = school ? `our program at ${school}` : "our program";
+  const note = pl.note?.trim();
+  const followUp = replyEnabled() ? "just reply to this email" : `message me again on Coach Line`;
+  const where = (pl.location ? ` at ${pl.location}` : "");
+  switch (req.answer_kind) {
+    case "camp":
+      return {
+        paragraphs: [
+          `Thanks for reaching out about ${kid}. I took a look at the film you sent, and I'd like to get ${kid} in front of our staff in person.`,
+          `Our <strong>${esc(pl.name)}</strong> is <strong>${esc(pl.dates)}</strong>${esc(where)}. Camp is the best way for us to evaluate ${profile} up close: we see the athleticism, the coachability and how ${kid} competes, which film can't fully show. A lot of our recruiting relationships start right there.`,
+          ...(note ? [esc(note)] : []),
+          `If ${kid} signs up, let me know so I can make a point to find ${kid} there.`,
+        ],
+        steps: [
+          pl.url ? `Register for ${esc(pl.name)} (link below) — spots fill up.` : `Register for ${esc(pl.name)} through ${school ? esc(school) + "'s" : "the"} athletics website.`,
+          `Bring updated measurables (height, weight, times) and be ready to introduce yourself to the staff.`,
+          `Come in sharp on the fundamentals at ${esc(pos)} — that's what we evaluate first.`,
+          `Afterward, ${followUp} with a quick thank-you and any new film.`,
+        ],
+        cta: pl.url ? { label: `Register for ${pl.name}`, url: pl.url } : undefined,
+      };
+    case "event":
+      return {
+        paragraphs: [
+          `Thanks for reaching out about ${kid}, and for sending the film.`,
+          `Our staff will be at <strong>${esc(pl.name)}</strong> (<strong>${esc(pl.dates)}</strong>${esc(where)}). If ${kid} is playing there, that's a great chance for us to see ${profile} in a live setting.`,
+          ...(note ? [esc(note)] : []),
+        ],
+        steps: [
+          `If ${kid}'s team is attending, ${followUp} with the team name, jersey number and game schedule so we can find ${kid}.`,
+          `Play your game — we're watching effort and how ${kid} responds to mistakes, not just highlights.`,
+          `After the event, send any new film or stats.`,
+        ],
+      };
+    case "film":
+      return {
+        paragraphs: [
+          `Thanks for reaching out about ${kid}. I appreciate you sending film.`,
+          `Before I can give you an honest evaluation, I'd like to see more of ${kid} — ideally a full, unedited game. Highlights show the best moments; full games show us consistency, effort and decision-making, which is what we recruit on.`,
+          ...(note ? [esc(note)] : []),
+        ],
+        steps: [
+          `Send a full game (or two halves) — unedited, with ${kid}'s jersey number noted.`,
+          `Put ${kid}'s best 5–8 plays at ${esc(pos)} in the first minute of the highlight reel.`,
+          `Include current measurables and academics (GPA) with the film.`,
+          `Then ${followUp} with the new link.`,
+        ],
+      };
+    case "update":
+      return {
+        paragraphs: [
+          `Thanks for reaching out about ${kid}. I'd like to keep following ${kid}'s progress.`,
+          `Recruiting ${profile} is a process — we watch how athletes develop over a season. Keep me in the loop as ${kid} grows.`,
+          ...(note ? [esc(note)] : []),
+        ],
+        steps: [
+          `Send an update after the season: new film, stats and any measurable improvements.`,
+          `Share ${kid}'s tournament or showcase schedule so we can try to see ${kid} live.`,
+          `Keep grades up — it opens more doors than most families realize.`,
+          `When you have something new, ${followUp}.`,
+        ],
+      };
+    case "level": {
+      const lvl = esc(pl.level ?? "another level");
+      return {
+        paragraphs: [
+          `Thanks for reaching out about ${kid}, and for trusting me with an honest answer.`,
+          `Based on the film, I see ${kid} as a better fit at the <strong>${lvl}</strong> level right now. That isn't a knock — it's where I think ${kid} would play early, develop the most and have the best experience. Plenty of great players take that path.`,
+          ...(note ? [esc(note)] : []),
+        ],
+        steps: [
+          `Build a list of 10–15 ${lvl} programs that fit ${kid} academically and athletically, and reach out to them directly.`,
+          `Look for ${lvl} camps and showcases where those staffs recruit.`,
+          `Keep developing — players' levels change, and updated film can change the conversation.`,
+        ],
+      };
+    }
+    default:
+      return {
+        paragraphs: [`Thanks for reaching out about ${kid}.`, ...(note ? [esc(note)] : [])],
+        steps: [],
+      };
+  }
+}
+
 export function parentAnswer(a: {
   req: EvalRequest; coach: Coach; postalAddress: string; askAnotherUrl?: string; replyHint: boolean;
 }): Rendered {
   const { req, coach } = a;
   const school = coach.school ?? (req.target_school !== coach.full_name ? req.target_school : null);
   const who = school ? `${coach.full_name} (${school})` : coach.full_name;
-  const subject = `${who} answered ${req.athlete_name.split(" ")[0]} 🎉`;
+  const kid = req.athlete_name.split(" ")[0]!;
+  const parentFirst = req.purchaser_name.split(" ")[0] || "there";
+  const subject = `${who} answered ${kid} 🎉`;
+  const letter = personalAnswer(req, coach);
+  const last = coach.full_name.split(" ").slice(-1)[0];
+  const sig = `<p style="margin:18px 0 0;font-size:15px;line-height:1.5;color:${NAVY};">— Coach ${esc(last)}<br><span style="color:${MUTED};font-size:14px;">${esc([coach.full_name, coach.title, school].filter(Boolean).join(" · "))}</span></p>`;
+  const steps = letter.steps.length
+    ? `<div style="margin:18px 0 0;padding:16px;border-radius:14px;background:#F6F9FF;border:1px solid #DCE6FF;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${BLUE};font-weight:700;">Your next steps</div><ol style="margin:8px 0 0;padding-left:20px;font-size:15px;line-height:1.6;color:${NAVY};">${letter.steps.map((s) => `<li style="margin:4px 0;">${s}</li>`).join("")}</ol></div>`
+    : "";
   const html = layout({
-    preheader: `${coach.full_name} answered your message about ${req.athlete_name}.`,
-    heading: `${coach.full_name} answered`,
+    preheader: `A personal answer from ${coach.full_name} about ${req.athlete_name}.`,
+    heading: `A personal answer from ${coach.full_name}`,
     bodyHtml:
-      p(`<span style="color:${MUTED};">${esc([coach.title, school].filter(Boolean).join(" · "))}</span>`) +
-      answerCardHtml(req, coach) +
+      `<div style="padding:4px 0 0;border-left:3px solid ${BLUE};padding-left:16px;">` +
+      p(`Hi ${esc(parentFirst)},`) +
+      letter.paragraphs.map((x) => p(x)).join("") +
+      sig + `</div>` +
+      steps +
+      (letter.cta ? `<p style="margin:18px 0 0;"><a href="${esc(letter.cta.url)}" style="display:inline-block;padding:13px 20px;background:${BLUE};color:#fff;border-radius:12px;font-weight:700;text-decoration:none;">${esc(letter.cta.label)} →</a></p>` : "") +
       (replyEnabled()
-        ? p(`<strong>Want to respond?</strong> Just reply to this email (or text us back if you got a text) — we'll pass it straight to ${esc(coach.full_name.split(" ")[0])}. Follow-ups are free.`) +
-          p(`<span style="font-size:13px;color:${MUTED};">Your email and phone stay private — every message goes through The Athlete Market.</span>`)
+        ? p(`<span style="font-size:13px;color:${MUTED};"><strong>Want to respond?</strong> Just reply to this email (or text us back) — we'll pass it straight to Coach ${esc(last)}. Your email and phone stay private.</span>`)
         : ""),
     cta: a.askAnotherUrl ? { label: "Ask another school", url: a.askAnotherUrl } : undefined,
-    footerHtml: `Reference ${esc(req.ref)}. Ask any college coach on Coach Line by The Athlete Market.`,
+    footerHtml: `Reference ${esc(req.ref)}. Sent through Coach Line by The Athlete Market.`,
     postalAddress: a.postalAddress,
   });
-  const pl = (req.answer_payload ?? {}) as Record<string, string>;
-  const text = [`${who} answered about ${req.athlete_name}.`, "",
-    req.answer_kind === "camp" ? `Camp: ${pl.name} — ${pl.dates}${pl.location ? `, ${pl.location}` : ""}${pl.url ? `\nRegister: ${pl.url}` : ""}` : "",
-    req.answer_kind === "event" ? `They'll be at: ${pl.name} — ${pl.dates}${pl.location ? `, ${pl.location}` : ""}` : "",
-    req.answer_kind === "film" ? "They'd like more film — reply with a link." : "",
-    req.answer_kind === "update" ? "Keep them updated — reply when you have new film or results." : "",
-    req.answer_kind === "level" ? `Better fit: ${pl.level}` : "",
-    pl.note ?? "", "", "Reply to this email to respond — we'll pass it on.", a.postalAddress].filter((l) => l !== "").join("\n");
+  const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+  const text = [
+    `Hi ${parentFirst},`, "",
+    ...letter.paragraphs.map(strip).flatMap((x) => [x, ""]),
+    `— Coach ${last}`, [coach.full_name, coach.title, school].filter(Boolean).join(" · "), "",
+    ...(letter.steps.length ? ["YOUR NEXT STEPS", ...letter.steps.map((x, i) => `${i + 1}. ${strip(x)}`), ""] : []),
+    ...(letter.cta ? [`${letter.cta.label}: ${letter.cta.url}`, ""] : []),
+    ...(a.askAnotherUrl ? [`Ask another school: ${a.askAnotherUrl}`, ""] : []),
+    a.postalAddress,
+  ].join("\n");
   return { subject, html, text };
 }
 

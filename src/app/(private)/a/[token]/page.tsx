@@ -3,6 +3,7 @@ import { AnswerForm } from "@/components/answer-form";
 import { money } from "@/lib/format";
 import { filmEmbedUrl, filmHost } from "@/lib/film";
 import { getDeps } from "@/lib/server";
+import { payoutsUrl } from "@/lib/services/links";
 import { resolveAnswerLink } from "@/lib/services/line";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,9 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
   const open = ["paid", "coach_notified", "accepted"].includes(req.status) && !!req.expires_at && Date.parse(req.expires_at) > deps.now().getTime();
   const first = req.athlete_name.split(" ")[0]!;
   const amount = req.coach_payout_cents > 0 ? money(req.coach_payout_cents) : null;
+  // Coaches who haven't connected Stripe yet get a "Set up payouts" button right after answering.
+  const payoutReady = coach.stripe_transfers_active && coach.stripe_details_submitted;
+  const payoutUrl = amount && !payoutReady ? payoutsUrl(coach).replace(/^https?:\/\/[^/]+/, "") : null;
 
   if (["submitted", "completed"].includes(req.status)) {
     const mine = req.coach_id === coach.id;
@@ -25,7 +29,8 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
       <div className="card p-6 text-center">
         <p className="text-4xl">{mine ? "✓" : "👍"}</p>
         <h1 className="mt-2 text-2xl font-bold">{mine ? `Answered — thank you, Coach` : "Someone on your staff already answered"}</h1>
-        <p className="mt-1 text-muted">{mine ? `${first}'s family has your answer.${amount ? ` Your ${amount} is on its way.` : ""}` : "Nothing more to do. Thanks!"}</p>
+        <p className="mt-1 text-muted">{mine ? `${first}'s family has your answer.${amount && !payoutUrl ? ` Your ${amount} is on its way.` : ""}` : "Nothing more to do. Thanks!"}</p>
+        {mine && payoutUrl && <a href={payoutUrl} className="btn-primary mt-4 w-full">Set up payouts to get your {amount} (3 min)</a>}
       </div>
     );
   }
@@ -57,7 +62,7 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
       </div>
       <div className="card p-5">
         <h2 className="mb-3 text-lg font-bold">Answer in one tap</h2>
-        <AnswerForm token={token} first={first} amount={amount} camps={coach.camps ?? []} events={coach.events ?? []} initialKind={initialKind}
+        <AnswerForm token={token} first={first} amount={amount} camps={coach.camps ?? []} events={coach.events ?? []} initialKind={initialKind} payoutUrl={payoutUrl}
           canPass={req.escalation_index < req.escalation_ids.length - 1} />
       </div>
     </div>

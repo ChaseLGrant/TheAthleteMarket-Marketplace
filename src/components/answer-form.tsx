@@ -14,7 +14,7 @@ const TILES: { k: Kind; icon: string; title: string; sub: string }[] = [
 ];
 const LEVELS = ["D1", "D2", "D3", "NAIA", "JUCO"];
 
-export function AnswerForm(p: { token: string; first: string; amount: string | null; camps: CampItem[]; events: EventItem[]; initialKind?: Kind; canPass: boolean }) {
+export function AnswerForm(p: { token: string; first: string; amount: string | null; camps: CampItem[]; events: EventItem[]; initialKind?: Kind; canPass: boolean; payoutUrl?: string | null }) {
   const [kind, setKind] = useState<Kind | null>(p.initialKind ?? null);
   const [pick, setPick] = useState(0); // index into saved camps/events; -1 = new
   const [item, setItem] = useState<{ name: string; dates: string; location: string; url: string }>({ name: "", dates: "", location: "", url: "" });
@@ -43,7 +43,13 @@ export function AnswerForm(p: { token: string; first: string; amount: string | n
       <div className="rounded-2xl bg-success-50 p-6 text-center ring-1 ring-[#c3e8d2]">
         <p className="text-4xl">✓</p>
         <p className="mt-1 text-lg font-bold">Sent to {p.first}&apos;s family</p>
-        {p.amount && <p className="text-sm text-muted">Your {p.amount} is on its way.</p>}
+        {p.amount && (p.payoutUrl
+          ? <>
+              <p className="mt-1 text-sm text-muted">You earned <strong className="text-navy">{p.amount}</strong>. One quick step to get it:</p>
+              <a href={p.payoutUrl} className="btn-primary mt-3 w-full">Set up payouts to get your {p.amount} (3 min)</a>
+              <p className="mt-2 text-xs text-muted">Secure setup with Stripe. Your money is held safely until you finish — and every future answer pays you automatically.</p>
+            </>
+          : <p className="text-sm text-muted">Your {p.amount} is on its way to your bank.</p>)}
         {(kind === "camp" || kind === "event") && save && useNew && <p className="mt-2 text-xs text-muted">Saved — next time it&apos;s one tap.</p>}
       </div>
     );
@@ -102,9 +108,10 @@ export function AnswerForm(p: { token: string; first: string; amount: string | n
             </div>
           )}
           <div>
-            <label htmlFor="note" className="label">{kind === "personal" ? "Your reply" : "Add a note (optional)"}</label>
-            <textarea id="note" rows={kind === "personal" ? 5 : 2} maxLength={3000} value={note} onChange={(e) => setNote(e.target.value)} className="field"
-              placeholder={kind === "personal" ? `Hi — thanks for reaching out about ${p.first}…` : "e.g. Liked the footwork at 0:42."} />
+            <label htmlFor="note" className="label">{kind === "personal" ? "Your reply" : <>One thing you noticed about {p.first} <span className="font-normal text-muted">(optional — families love this)</span></>}</label>
+            <textarea id="note" rows={kind === "personal" ? 5 : 3} maxLength={3000} value={note} onChange={(e) => setNote(e.target.value)} className="field"
+              placeholder={kind === "personal" ? `Hi — thanks for reaching out about ${p.first}…` : `e.g. "Really like ${p.first}'s first step at 0:42 — keep working on finishing with the left hand."`} />
+            <p className="hint">We send {p.first}&apos;s family a personal note in your name: your answer, why it matters, clear next steps, and this note.</p>
           </div>
           {error && <p className="field-error" role="alert">{error}</p>}
           <button className="btn-primary w-full text-[17px]" disabled={state === "busy"}>{state === "busy" ? "Sending…" : p.amount ? `Send answer & earn ${p.amount}` : "Send answer"}</button>

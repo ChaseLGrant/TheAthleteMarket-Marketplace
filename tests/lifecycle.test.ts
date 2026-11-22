@@ -115,7 +115,7 @@ describe("fulfillment + payout", () => {
     expect(req.status).toBe("completed");
     expect(req.payout_status).toBe("blocked");
     expect(deps.mailer.sent.some((m) => m.subject.includes("ready") || m.subject.includes("sent"))).toBe(true);
-    expect(deps.mailer.sent.some((m) => m.subject.startsWith("Claim your"))).toBe(true);
+    expect(deps.mailer.sent.some((m) => m.subject === "Get paid for your answer — set up payouts")).toBe(true);
     expect(deps.payments.transfers).toHaveLength(0);
 
     await onboard(deps, coach.id);

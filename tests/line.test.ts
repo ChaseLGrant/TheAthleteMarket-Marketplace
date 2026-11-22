@@ -88,7 +88,13 @@ describe("asking", () => {
     expect(deps.payments.captures).toEqual([req!.stripe_payment_intent_id]);
     const ans = mails(deps, "morgan@example.com").find((m) => /answered/.test(m.subject))!;
     expect(ans.html).toContain("Elite Guard Camp");
-    expect(ans.html).toContain("Register for camp");
+    expect(ans.html).toContain("Register for Elite Guard Camp");
+    // A personal note, not a form letter: greets the parent, names the athlete, gives next steps, signs off.
+    expect(ans.html).toContain("Hi Morgan,");
+    expect(ans.html).toContain("a 2027 PG up close");
+    expect(ans.html).toContain("Your next steps");
+    expect(ans.html).toContain("— Coach Recruiter");
+    expect(ans.text).toMatch(/YOUR NEXT STEPS\n1\. Register for Elite Guard Camp/);
     expect(ans.replyTo).toMatch(/^p-/);
     expect(ans.html).not.toContain("rc@example.edu");
     expect(texts(deps, "+15552223333").some((t) => /answered! Camp invite: Elite Guard Camp/.test(t))).toBe(true);
