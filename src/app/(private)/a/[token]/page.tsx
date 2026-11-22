@@ -44,6 +44,12 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
   return (
     <div className="space-y-4">
       <div className="card overflow-hidden">
+        {amount && (
+          <div className="bg-[#E9F7EF] px-5 py-3 text-[#0A5C2F]">
+            <p className="text-lg font-extrabold">💵 You get paid {amount} for answering</p>
+            <p className="text-sm">One tap below — about 30 seconds. Paid to your bank through Stripe.</p>
+          </div>
+        )}
         <div className="bg-navy px-5 py-4 text-white">
           <p className="text-xs font-bold uppercase tracking-wider text-white/60">Coach Line · {req.target_school ?? coach.school}</p>
           <h1 className="mt-1 text-xl font-bold">{req.athlete_name}</h1>

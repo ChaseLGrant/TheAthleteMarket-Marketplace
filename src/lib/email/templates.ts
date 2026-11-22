@@ -467,6 +467,12 @@ export function coachAskInvite(a: {
     preheader: `“${(req.message ?? "").slice(0, 90)}…” — answer in one tap from your phone.`,
     heading: a.escalated ? `${req.athlete_name} is hoping to hear from your staff` : `A recruit asked about your program`,
     bodyHtml:
+      // The pay, front and center (kept out of the subject line so school spam filters don't junk it).
+      (a.earnCents > 0
+        ? `<div style="margin:0 0 16px;padding:14px 16px;border-radius:14px;background:#E9F7EF;border:1px solid #BFE6CE;color:#0A5C2F;">` +
+          `<div style="font-size:18px;font-weight:800;">💵 You get paid ${money(a.earnCents)} for answering</div>` +
+          `<div style="font-size:14px;margin-top:4px;">Tap one answer below — about 30 seconds. Paid straight to your bank through Stripe.</div></div>`
+        : "") +
       table([
         row("Athlete", `${esc(req.athlete_name)} · ${esc(req.position)} · Class of ${esc(req.grad_year)}`),
         row("Sport", esc(req.sport)),
@@ -475,14 +481,14 @@ export function coachAskInvite(a: {
         row("Answer by", esc(dateOnly(req.expires_at))),
       ]) +
       `<div style="margin:14px 0;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.message ?? "")}</div>` +
-      p(`<strong>Answer in one tap:</strong>`) +
+      p(`<strong>Answer in one tap${a.earnCents > 0 ? ` and earn ${money(a.earnCents)}` : ""}:</strong>`) +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${buttons}</table>` +
       (replyEnabled() ? p(`<span style="font-size:13px;color:${MUTED};">On your phone? You can also just <strong>hit Reply</strong> and type <strong>CAMP</strong>, <strong>EVENT</strong>, <strong>FILM</strong>, <strong>UPDATE</strong>, <strong>LEVEL D2</strong> — or any message. Your email address is never shown to the family.</span>`) : "") +
       (!coach.camps?.length ? p(`<span style="font-size:13px;color:${MUTED};">Tip: <a href="${esc(a.hubUrl)}" style="color:${BLUE};">save your camp dates once</a> and every camp invite fills itself in.</span>`) : ""),
     footerHtml: `Sent through The Athlete Market Coach Line. Not for you? <a href="${esc(a.declineUrl)}" style="color:${MUTED};">Pass on this one</a> · <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause messages</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
     postalAddress: a.postalAddress,
   });
-  const text = [subject, "", req.message ?? "", "", `Film: ${req.film_url}`, "",
+  const text = [subject, "", ...(a.earnCents > 0 ? [`You get paid ${money(a.earnCents)} for answering — one tap, about 30 seconds.`, ""] : []), req.message ?? "", "", `Film: ${req.film_url}`, "",
     ...ANSWER_BUTTONS.map((b) => `${b.label.replace(/^\S+\s/, "")}: ${a.answerUrl(b.kind)}`), "",
     ...(replyEnabled() ? ["Or hit Reply and type CAMP / EVENT / FILM / UPDATE / LEVEL D2 / any message."] : []), `Pass: ${a.declineUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
   return { subject, html, text };
