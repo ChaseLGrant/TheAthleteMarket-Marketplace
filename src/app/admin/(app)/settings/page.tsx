@@ -35,6 +35,11 @@ export default async function Settings() {
               <p className="hint">At 50%, a $20 answer pays the coach $10 and you keep $10 (minus Stripe fees).</p></div>
             <div><label className="label" htmlFor="escalate_hours">Pass to next coach after (hours)</label>
               <input id="escalate_hours" name="escalate_hours" type="number" min={6} max={72} className="field" defaultValue={s.escalate_after_hours} /></div>
+            <div><label className="label" htmlFor="fast_bonus">Fast-answer bonus to the coach ($, 0 = off)</label>
+              <input id="fast_bonus" name="fast_bonus" type="number" min={0} max={100} step={1} className="field" defaultValue={s.fast_bonus_cents / 100} />
+              <p className="hint">Comes out of your share. At $5: answer fast → coach $15, you $5.</p></div>
+            <div><label className="label" htmlFor="fast_bonus_hours">…if they answer within (hours)</label>
+              <input id="fast_bonus_hours" name="fast_bonus_hours" type="number" min={1} max={168} className="field" defaultValue={s.fast_bonus_hours} /></div>
           </div>
         </fieldset>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

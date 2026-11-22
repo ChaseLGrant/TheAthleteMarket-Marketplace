@@ -10,7 +10,7 @@ import { log } from "../log";
 import { toE164 } from "../phone";
 import { priceBreakdown } from "../pricing";
 import { makeToken, randomRef, tokenId, verifyToken } from "../tokens";
-import type { AnswerKind, AskDraft, CampItem, Coach, EvalRequest, EventItem } from "../types";
+import type { AnswerKind, AskDraft, CampItem, Coach, EvalRequest, EventItem, Settings } from "../types";
 import { inboundDomain } from "./email-native";
 import { coachDeclineUrl, hubUrl, secondOpinionUrl, unsubscribeUrl } from "./links";
 import { capturePayment, completeRequest, refundRequest, UserFacingError } from "./lifecycle";
@@ -226,11 +226,13 @@ export async function resolveAnswerLink(deps: Deps, token: string): Promise<{ re
 /** Send (or re-send on escalation) the "answer in one tap" email + text to one coach. */
 export async function sendAskInvite(deps: Deps, req: EvalRequest, coach: Coach, opts: { escalated?: boolean; reminder?: { daysLeft: number; nudge?: boolean }; key: string }) {
   const { replyAddress } = await import("./email-native");
+  const bonus = fastBonus(await deps.store.getSettings(), req, deps.now(), { startsNow: !opts.reminder });
   await sendEmail(deps, {
     to: coach.email!,
     rendered: coachAskInvite({
       req, coach, answerUrl: (k) => answerUrl(req, coach, k), declineUrl: coachDeclineUrl(req), unsubscribeUrl: unsubscribeUrl(coach.email!),
       hubUrl: hubUrl(coach), postalAddress: env.postalAddress(), earnCents: req.coach_payout_cents, escalated: opts.escalated, reminder: opts.reminder,
+      bonus: bonus.cents > 0 ? { cents: bonus.cents, hoursLeft: Math.max(1, Math.round((bonus.until!.getTime() - deps.now().getTime()) / 3_600_000)) } : undefined,
     }),
     template: opts.reminder ? "ask_reminder" : opts.escalated ? "ask_escalated" : "ask_invite",
     idempotencyKey: opts.key,
@@ -240,7 +242,7 @@ export async function sendAskInvite(deps: Deps, req: EvalRequest, coach: Coach, 
     replyTo: replyAddress(req),
   });
   if (coach.phone && coach.sms_opt_in_at && !coach.sms_opted_out && !opts.reminder) {
-    const r = await sendSms(deps, { to: coach.phone, body: lineSms.coachAsk(req, answerUrl(req, coach), req.coach_payout_cents), template: "ask_sms", dedupeKey: `sms-${opts.key}`, requestId: req.id, coachId: coach.id });
+    const r = await sendSms(deps, { to: coach.phone, body: lineSms.coachAsk(req, answerUrl(req, coach), req.coach_payout_cents + bonus.cents, bonus.cents > 0 ? bonus.hours : undefined), template: "ask_sms", dedupeKey: `sms-${opts.key}`, requestId: req.id, coachId: coach.id });
     if (r === "opted_out") await deps.store.updateCoach(coach.id, { sms_opted_out: true });
   }
 }
@@ -268,6 +270,20 @@ export function answerSummary(kind: AnswerKind, pl: Record<string, unknown>): st
   }
 }
 
+/**
+ * Fast-answer bonus: the coach earns extra (from the platform's share) for answering within N hours of
+ * getting the message. Each coach on the staff chain gets their own window, starting when it reached them.
+ */
+export function fastBonus(settings: Pick<Settings, "fast_bonus_cents" | "fast_bonus_hours">, req: Pick<EvalRequest, "price_cents" | "coach_payout_cents" | "escalated_at" | "coach_notified_at" | "paid_at">, now: Date, opts: { startsNow?: boolean } = {}) {
+  const room = Math.max(0, req.price_cents - req.coach_payout_cents);
+  const cents = Math.min(settings.fast_bonus_cents ?? 0, room);
+  const startIso = opts.startsNow ? null : req.escalated_at ?? req.coach_notified_at ?? req.paid_at;
+  const start = startIso ? Date.parse(startIso) : now.getTime();
+  const until = new Date(start + (settings.fast_bonus_hours ?? 24) * 3_600_000);
+  const active = cents > 0 && req.coach_payout_cents > 0 && now < until;
+  return { cents: active ? cents : 0, until: active ? until : null, base: req.coach_payout_cents, hours: settings.fast_bonus_hours ?? 24, offered: cents };
+}
+
 /** First answer wins: charge the hold, deliver to the parent, credit the answering coach. */
 export async function submitAnswer(deps: Deps, req: EvalRequest, coach: Coach, a: AnswerInput): Promise<EvalRequest> {
   if (!req.escalation_ids.includes(coach.id)) throw new UserFacingError("This request isn't addressed to you.");
@@ -289,6 +305,7 @@ export async function submitAnswer(deps: Deps, req: EvalRequest, coach: Coach, a
   }
   if (a.kind === "personal" && !(a.note && a.note.trim().length >= 3)) throw new UserFacingError("Write a short reply.");
   if (a.camp?.url && !/^https:\/\//.test(a.camp.url)) throw new UserFacingError("Camp link must start with https://");
+  const bonus = fastBonus(await deps.store.getSettings(), req, deps.now());
 
   const r = await deps.store.casRequest(
     req.id,
@@ -298,6 +315,7 @@ export async function submitAnswer(deps: Deps, req: EvalRequest, coach: Coach, a
       answer_kind: a.kind, answer_payload: payload, response_kind: "written",
       response_text: answerSummary(a.kind, payload) + (payload.note && a.kind !== "personal" ? `\n\n${payload.note}` : ""),
       level_read: a.kind === "level" ? String(payload.level) : req.level_read, response_from: a.via,
+      ...(bonus.cents > 0 ? { coach_payout_cents: req.coach_payout_cents + bonus.cents, platform_fee_cents: req.price_cents - req.coach_payout_cents - bonus.cents } : {}),
     },
   );
   if (!r) {

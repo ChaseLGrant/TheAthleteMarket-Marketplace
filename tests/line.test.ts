@@ -98,7 +98,7 @@ describe("asking", () => {
     expect(ans.replyTo).toMatch(/^p-/);
     expect(ans.html).not.toContain("rc@example.edu");
     expect(texts(deps, "+15552223333").some((t) => /answered! Camp invite: Elite Guard Camp/.test(t))).toBe(true);
-    expect(deps.payments.transfers[0]!.amountCents).toBe(1000);
+    expect(deps.payments.transfers[0]!.amountCents).toBe(1500); // $10 + $5 fast-answer bonus (answered right away)
     expect((await deps.store.getCoach(rc.id))!.camps[0]!.name).toBe("Elite Guard Camp");
   });
 
@@ -279,5 +279,35 @@ describe("inbox placement", () => {
       await place(deps);
       expect(mails(deps, "rc@example.edu")[0]!.replyTo).toBeUndefined();
     } finally { process.env.INBOUND_WEBHOOK_SECRET = saved; }
+  });
+});
+
+describe("fast-answer bonus", () => {
+  it("answer within 24h: coach earns $15 (bonus from the platform's share); after 24h: $10", async () => {
+    const { deps, advance } = makeDeps();
+    const { rc } = await staff(deps);
+    const [fast] = await place(deps);
+    const invite = mails(deps, "rc@example.edu")[0]!;
+    expect(invite.html).toContain("Answer in the next 24 hours: earn $15");
+    expect(invite.subject).not.toMatch(/\$/);
+    const a = await submitAnswer(deps, (await deps.store.getRequest(fast!.id))!, rc, { kind: "update", via: "link" });
+    expect(a.coach_payout_cents).toBe(1500);
+    expect(a.platform_fee_cents).toBe(500);
+    expect(a.price_cents).toBe(2000);
+
+    const [slow] = await place(deps, { purchaserEmail: "other@example.com", targets: [{ school: SCHOOL, sport: "Basketball (M)" }] });
+    advance(25);
+    const b = await submitAnswer(deps, (await deps.store.getRequest(slow!.id))!, rc, { kind: "update", via: "link" });
+    expect(b.coach_payout_cents).toBe(1000);
+    expect(b.platform_fee_cents).toBe(1000);
+  });
+
+  it("bonus 0 turns it off", async () => {
+    const { deps } = makeDeps();
+    deps.store.settings.fast_bonus_cents = 0;
+    const { rc } = await staff(deps);
+    const [r] = await place(deps);
+    expect(mails(deps, "rc@example.edu")[0]!.html).toContain("You get paid $10 for answering");
+    expect((await submitAnswer(deps, (await deps.store.getRequest(r!.id))!, rc, { kind: "update", via: "link" })).coach_payout_cents).toBe(1000);
   });
 });

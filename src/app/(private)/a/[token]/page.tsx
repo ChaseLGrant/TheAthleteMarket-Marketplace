@@ -4,7 +4,7 @@ import { money } from "@/lib/format";
 import { filmEmbedUrl, filmHost } from "@/lib/film";
 import { getDeps } from "@/lib/server";
 import { payoutsUrl } from "@/lib/services/links";
-import { resolveAnswerLink } from "@/lib/services/line";
+import { fastBonus, resolveAnswerLink } from "@/lib/services/line";
 
 export const dynamic = "force-dynamic";
 const KINDS = ["camp", "event", "film", "update", "level", "personal"] as const;
@@ -18,7 +18,10 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
   const { req, coach } = found;
   const open = ["paid", "coach_notified", "accepted"].includes(req.status) && !!req.expires_at && Date.parse(req.expires_at) > deps.now().getTime();
   const first = req.athlete_name.split(" ")[0]!;
-  const amount = req.coach_payout_cents > 0 ? money(req.coach_payout_cents) : null;
+  const done = ["submitted", "completed"].includes(req.status);
+  const bonus = done ? null : fastBonus(await deps.store.getSettings(), req, deps.now());
+  const bonusHoursLeft = bonus?.until ? Math.max(1, Math.round((bonus.until.getTime() - deps.now().getTime()) / 3_600_000)) : 0;
+  const amount = req.coach_payout_cents > 0 ? money(req.coach_payout_cents + (bonus?.cents ?? 0)) : null;
   // Coaches who haven't connected Stripe yet get a "Set up payouts" button right after answering.
   const payoutReady = coach.stripe_transfers_active && coach.stripe_details_submitted;
   const payoutUrl = amount && !payoutReady ? payoutsUrl(coach).replace(/^https?:\/\/[^/]+/, "") : null;
@@ -46,8 +49,17 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
       <div className="card overflow-hidden">
         {amount && (
           <div className="bg-[#E9F7EF] px-5 py-3 text-[#0A5C2F]">
-            <p className="text-lg font-extrabold">💵 You get paid {amount} for answering</p>
-            <p className="text-sm">One tap below — about 30 seconds. Paid to your bank through Stripe.</p>
+            {bonus?.cents ? (
+              <>
+                <p className="text-lg font-extrabold">💵 Answer in the next {bonusHoursLeft} hours: earn {amount}</p>
+                <p className="text-sm">Includes a {money(bonus.cents)} fast-answer bonus (after that, {money(bonus.base)}). One tap below — about 30 seconds.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-extrabold">💵 You get paid {amount} for answering</p>
+                <p className="text-sm">One tap below — about 30 seconds. Paid to your bank through Stripe.</p>
+              </>
+            )}
           </div>
         )}
         <div className="bg-navy px-5 py-4 text-white">

@@ -579,3 +579,9 @@ alter table marketplace.requests add constraint requests_price_cents_check check
 alter table marketplace.saved_payers add column if not exists athlete_film_url text;
 notify pgrst, 'reload schema';
 
+-- ===================== supabase/migrations/0010_fast_bonus.sql =====================
+-- Fast-answer bonus (optional): lets you change it in Admin → Settings. Without this, the defaults ($5 within 24h) apply.
+alter table marketplace.settings add column if not exists fast_bonus_cents int not null default 500 check (fast_bonus_cents between 0 and 100000);
+alter table marketplace.settings add column if not exists fast_bonus_hours int not null default 24 check (fast_bonus_hours between 1 and 168);
+notify pgrst, 'reload schema';
+

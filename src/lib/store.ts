@@ -134,6 +134,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ask_prices: { "1": 2000, "3": 4900, "5": 6900 },
   ask_coach_share_bps: 5000,
   escalate_after_hours: 48,
+  fast_bonus_cents: 500,
+  fast_bonus_hours: 24,
   show_directory_listings: true,
   require_payouts_before_booking: false,
 };

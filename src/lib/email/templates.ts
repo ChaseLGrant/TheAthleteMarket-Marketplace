@@ -448,6 +448,8 @@ const ANSWER_BUTTONS: { kind: string; label: string; sub: string }[] = [
 export function coachAskInvite(a: {
   req: EvalRequest; coach: Coach; answerUrl: (kind?: string) => string; declineUrl: string; unsubscribeUrl: string; hubUrl: string;
   postalAddress: string; earnCents: number; escalated?: boolean; reminder?: { daysLeft: number; nudge?: boolean };
+  /** Fast-answer bonus still available: extra cents, and hours left to earn it. */
+  bonus?: { cents: number; hoursLeft: number };
 }): Rendered {
   const { req, coach } = a;
   const who = `${req.athlete_name} (${req.grad_year} ${req.position})`;
@@ -470,25 +472,28 @@ export function coachAskInvite(a: {
       // The pay, front and center (kept out of the subject line so school spam filters don't junk it).
       (a.earnCents > 0
         ? `<div style="margin:0 0 16px;padding:14px 16px;border-radius:14px;background:#E9F7EF;border:1px solid #BFE6CE;color:#0A5C2F;">` +
-          `<div style="font-size:18px;font-weight:800;">💵 You get paid ${money(a.earnCents)} for answering</div>` +
-          `<div style="font-size:14px;margin-top:4px;">Tap one answer below — about 30 seconds. Paid straight to your bank through Stripe.</div></div>`
+          (a.bonus
+            ? `<div style="font-size:18px;font-weight:800;">💵 Answer in the next ${a.bonus.hoursLeft} hours: earn ${money(a.earnCents + a.bonus.cents)}</div>` +
+              `<div style="font-size:14px;margin-top:4px;">Fast-answer bonus (+${money(a.bonus.cents)}). After that, ${money(a.earnCents)}. Tap one answer below — about 30 seconds. Paid straight to your bank through Stripe.</div></div>`
+            : `<div style="font-size:18px;font-weight:800;">💵 You get paid ${money(a.earnCents)} for answering</div>` +
+              `<div style="font-size:14px;margin-top:4px;">Tap one answer below — about 30 seconds. Paid straight to your bank through Stripe.</div></div>`)
         : "") +
       table([
         row("Athlete", `${esc(req.athlete_name)} · ${esc(req.position)} · Class of ${esc(req.grad_year)}`),
         row("Sport", esc(req.sport)),
         row("Film", `<a href="${esc(req.film_url)}" style="color:${BLUE};">Watch film ↗</a>`),
-        ...(a.earnCents > 0 ? [row("You earn", `<span style="color:#0A7A3E;">${money(a.earnCents)} when you answer</span>`)] : []),
+        ...(a.earnCents > 0 ? [row("You earn", `<span style="color:#0A7A3E;">${a.bonus ? `${money(a.earnCents + a.bonus.cents)} within ${a.bonus.hoursLeft}h · ${money(a.earnCents)} after` : `${money(a.earnCents)} when you answer`}</span>`)] : []),
         row("Answer by", esc(dateOnly(req.expires_at))),
       ]) +
       `<div style="margin:14px 0;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.message ?? "")}</div>` +
-      p(`<strong>Answer in one tap${a.earnCents > 0 ? ` and earn ${money(a.earnCents)}` : ""}:</strong>`) +
+      p(`<strong>Answer in one tap${a.earnCents > 0 ? ` and earn ${money(a.earnCents + (a.bonus?.cents ?? 0))}` : ""}:</strong>`) +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${buttons}</table>` +
       (replyEnabled() ? p(`<span style="font-size:13px;color:${MUTED};">On your phone? You can also just <strong>hit Reply</strong> and type <strong>CAMP</strong>, <strong>EVENT</strong>, <strong>FILM</strong>, <strong>UPDATE</strong>, <strong>LEVEL D2</strong> — or any message. Your email address is never shown to the family.</span>`) : "") +
       (!coach.camps?.length ? p(`<span style="font-size:13px;color:${MUTED};">Tip: <a href="${esc(a.hubUrl)}" style="color:${BLUE};">save your camp dates once</a> and every camp invite fills itself in.</span>`) : ""),
     footerHtml: `Sent through The Athlete Market Coach Line. Not for you? <a href="${esc(a.declineUrl)}" style="color:${MUTED};">Pass on this one</a> · <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause messages</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
     postalAddress: a.postalAddress,
   });
-  const text = [subject, "", ...(a.earnCents > 0 ? [`You get paid ${money(a.earnCents)} for answering — one tap, about 30 seconds.`, ""] : []), req.message ?? "", "", `Film: ${req.film_url}`, "",
+  const text = [subject, "", ...(a.earnCents > 0 ? [a.bonus ? `Answer in the next ${a.bonus.hoursLeft} hours and earn ${money(a.earnCents + a.bonus.cents)} (${money(a.earnCents)} after that) — one tap, about 30 seconds.` : `You get paid ${money(a.earnCents)} for answering — one tap, about 30 seconds.`, ""] : []), req.message ?? "", "", `Film: ${req.film_url}`, "",
     ...ANSWER_BUTTONS.map((b) => `${b.label.replace(/^\S+\s/, "")}: ${a.answerUrl(b.kind)}`), "",
     ...(replyEnabled() ? ["Or hit Reply and type CAMP / EVENT / FILM / UPDATE / LEVEL D2 / any message."] : []), `Pass: ${a.declineUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
   return { subject, html, text };
@@ -720,8 +725,8 @@ export function draftConfirmYes(a: { school: string; priceCents: number; athlete
 }
 
 export const lineSms = {
-  coachAsk: (req: EvalRequest, url: string, earnCents: number) =>
-    `The Athlete Market: ${req.athlete_name} (${req.grad_year} ${req.position}) asked about your program${earnCents > 0 ? ` — ${money(earnCents)} for answering` : ""}. Answer in one tap: ${url} Reply STOP to opt out.`,
+  coachAsk: (req: EvalRequest, url: string, earnCents: number, bonusHours?: number) =>
+    `The Athlete Market: ${req.athlete_name} (${req.grad_year} ${req.position}) asked about your program${earnCents > 0 ? ` — earn ${money(earnCents)} for answering${bonusHours ? ` within ${bonusHours}h` : ""}` : ""}. Answer in one tap: ${url} Reply STOP to opt out.`,
   parentSent: (n: number, school: string, free = false) =>
     `The Athlete Market: your message is on its way to ${n === 1 ? school : `${n} schools`}. We'll text you the moment a coach answers.${free ? "" : " You're only charged if they do."} Reply STOP to opt out.`,
   parentOpened: (coachName: string) => `The Athlete Market: ${coachName} just opened your message 👀`,

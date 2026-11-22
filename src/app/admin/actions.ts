@@ -254,6 +254,10 @@ export async function saveSettings(_: Result, fd: FormData): Promise<Result> {
       require_admin_review: fd.get("require_admin_review") === "on",
       allow_active_college_coaches: fd.get("allow_active_college_coaches") === "on",
     });
+    // Fast-answer bonus lives in columns added by migration 0010 — save separately so older databases still save the rest.
+    const bonus = { fast_bonus_cents: Math.round(Math.min(100, Math.max(0, Number(fd.get("fast_bonus")) || 0)) * 100), fast_bonus_hours: Math.min(168, Math.max(1, Number(fd.get("fast_bonus_hours")) || 24)) };
+    try { await deps.store.updateSettings(bonus); }
+    catch { return "Settings saved — except the fast-answer bonus: run supabase/migrations/0010_fast_bonus.sql in Supabase to make it editable."; }
     return "Settings saved. New prices/commission apply to new requests only.";
   }, "/admin/settings");
 }

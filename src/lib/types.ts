@@ -54,6 +54,9 @@ export interface Settings {
   ask_prices: Record<string, number>;
   ask_coach_share_bps: number;
   escalate_after_hours: number;
+  /** Fast-answer bonus: extra paid to the coach (from the platform's share) for answering within fast_bonus_hours. 0 = off. */
+  fast_bonus_cents: number;
+  fast_bonus_hours: number;
   show_directory_listings: boolean;
   require_payouts_before_booking: boolean;
 }
