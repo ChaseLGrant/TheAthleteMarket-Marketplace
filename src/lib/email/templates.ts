@@ -12,6 +12,8 @@ export function esc(s: string | number | null | undefined): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Email replies only work once inbound email (Postmark) is set up. */
+const replyEnabled = () => !!process.env.INBOUND_WEBHOOK_SECRET?.trim();
 const NAVY = "#0A0D14";
 const BLUE = "#1F5FFF";
 const MUTED = "#5B6680";
@@ -448,12 +450,15 @@ export function coachAskInvite(a: {
 }): Rendered {
   const { req, coach } = a;
   const who = `${req.athlete_name} (${req.grad_year} ${req.position})`;
-  const earn = a.earnCents > 0 ? ` · ${money(a.earnCents)} for answering` : "";
+  // Inbox placement: no money or "answer in one tap" in the subject — school spam filters (Outlook) junk
+  // payment-sounding subjects. It reads like a normal recruiting email; the $ is inside.
+  const pos = req.position.length <= 4 ? req.position.toUpperCase() : req.position;
+  const about = req.target_school && req.target_school !== coach.full_name ? ` about ${req.target_school}` : "";
   const subject = a.reminder?.nudge
-    ? `${req.athlete_name} is still waiting on your answer${earn}`
+    ? `Following up: ${req.athlete_name} (${req.grad_year} ${pos})`
     : a.reminder
-    ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left to answer ${req.athlete_name}${earn}`
-    : `${who} ${req.target_school && req.target_school !== coach.full_name ? `asked about ${req.target_school}` : "sent you a question"} — answer in one tap${earn}`;
+    ? `Re: question from ${req.athlete_name} (${req.grad_year} ${pos})`
+    : `Question${about} from ${req.athlete_name} (${req.grad_year} ${pos})`;
   const buttons = ANSWER_BUTTONS.map(
     (b) => `<tr><td style="padding:0 0 8px;"><a href="${esc(a.answerUrl(b.kind))}" style="display:block;padding:12px 14px;border:1px solid #DCE6FF;border-radius:12px;background:#F6F9FF;text-decoration:none;color:${NAVY};"><span style="font-size:15px;font-weight:700;">${b.label}</span><br><span style="font-size:12.5px;color:${MUTED};">${b.sub}</span></a></td></tr>`,
   ).join("");
@@ -471,14 +476,14 @@ export function coachAskInvite(a: {
       `<div style="margin:14px 0;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.message ?? "")}</div>` +
       p(`<strong>Answer in one tap:</strong>`) +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${buttons}</table>` +
-      p(`<span style="font-size:13px;color:${MUTED};">On your phone? You can also just <strong>hit Reply</strong> and type <strong>CAMP</strong>, <strong>EVENT</strong>, <strong>FILM</strong>, <strong>UPDATE</strong>, <strong>LEVEL D2</strong> — or any message. Your email address is never shown to the family.</span>`) +
+      (replyEnabled() ? p(`<span style="font-size:13px;color:${MUTED};">On your phone? You can also just <strong>hit Reply</strong> and type <strong>CAMP</strong>, <strong>EVENT</strong>, <strong>FILM</strong>, <strong>UPDATE</strong>, <strong>LEVEL D2</strong> — or any message. Your email address is never shown to the family.</span>`) : "") +
       (!coach.camps?.length ? p(`<span style="font-size:13px;color:${MUTED};">Tip: <a href="${esc(a.hubUrl)}" style="color:${BLUE};">save your camp dates once</a> and every camp invite fills itself in.</span>`) : ""),
     footerHtml: `Sent through The Athlete Market Coach Line. Not for you? <a href="${esc(a.declineUrl)}" style="color:${MUTED};">Pass on this one</a> · <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause messages</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
     postalAddress: a.postalAddress,
   });
   const text = [subject, "", req.message ?? "", "", `Film: ${req.film_url}`, "",
     ...ANSWER_BUTTONS.map((b) => `${b.label.replace(/^\S+\s/, "")}: ${a.answerUrl(b.kind)}`), "",
-    "Or hit Reply and type CAMP / EVENT / FILM / UPDATE / LEVEL D2 / any message.", `Pass: ${a.declineUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
+    ...(replyEnabled() ? ["Or hit Reply and type CAMP / EVENT / FILM / UPDATE / LEVEL D2 / any message."] : []), `Pass: ${a.declineUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
   return { subject, html, text };
 }
 
@@ -517,8 +522,10 @@ export function parentAnswer(a: {
     bodyHtml:
       p(`<span style="color:${MUTED};">${esc([coach.title, school].filter(Boolean).join(" · "))}</span>`) +
       answerCardHtml(req, coach) +
-      p(`<strong>Want to respond?</strong> Just reply to this email (or text us back if you got a text) — we'll pass it straight to ${esc(coach.full_name.split(" ")[0])}. Follow-ups are free.`) +
-      p(`<span style="font-size:13px;color:${MUTED};">Your email and phone stay private — every message goes through The Athlete Market.</span>`),
+      (replyEnabled()
+        ? p(`<strong>Want to respond?</strong> Just reply to this email (or text us back if you got a text) — we'll pass it straight to ${esc(coach.full_name.split(" ")[0])}. Follow-ups are free.`) +
+          p(`<span style="font-size:13px;color:${MUTED};">Your email and phone stay private — every message goes through The Athlete Market.</span>`)
+        : ""),
     cta: a.askAnotherUrl ? { label: "Ask another school", url: a.askAnotherUrl } : undefined,
     footerHtml: `Reference ${esc(req.ref)}. Ask any college coach on Coach Line by The Athlete Market.`,
     postalAddress: a.postalAddress,

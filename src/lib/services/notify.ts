@@ -4,6 +4,7 @@ import { adminAlert, type Rendered } from "../email/templates";
 import { SmsOptedOutError } from "../integrations";
 import { log } from "../log";
 import { unsubscribeUrl } from "./links";
+import { inboundDomain } from "./email-native";
 
 /**
  * Send one email and record it in email_log. Coach-facing emails honor the suppression list.
@@ -33,6 +34,11 @@ export async function sendEmail(
   const testInbox = env.testInbox();
   if (testInbox && a.to.toLowerCase() !== testInbox) {
     a = { ...a, to: testInbox, rendered: { ...a.rendered, subject: `[TEST → ${a.to}] ${a.rendered.subject}` } };
+  }
+  // Until inbound email (Postmark) is set up, our private reply addresses can't receive mail. A Reply-To
+  // on a domain with no mail server is a spam signal, so leave it off (replies go to EMAIL_REPLY_TO, if set).
+  if (a.replyTo && !process.env.INBOUND_WEBHOOK_SECRET?.trim() && a.replyTo.toLowerCase().endsWith(`@${inboundDomain()}`)) {
+    a = { ...a, replyTo: undefined };
   }
   if (a.marketing && (await deps.store.isSuppressed(a.to))) {
     await deps.store.logEmail({ ...base, provider_id: null, status: "suppressed", error: null });

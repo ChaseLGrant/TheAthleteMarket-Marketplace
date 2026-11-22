@@ -63,7 +63,9 @@ describe("asking", () => {
     expect(reqs.every((r) => r.status === "coach_notified")).toBe(true);
     expect(deps.payments.holdAmounts.size).toBe(2);
     const invite = mails(deps, "rc@example.edu")[0]!;
-    expect(invite.subject).toMatch(/asked about Example University — answer in one tap · \$10/);
+    expect(invite.subject).toBe("Question about Example University from Taylor Brooks (2027 PG)");
+    expect(invite.subject).not.toMatch(/\$/); // no money in subjects (spam filters)
+    expect(invite.html).toContain("$10");
     expect(invite.html).toContain("/a/");
     expect(invite.html).toContain("Invite to camp");
     expect(invite.replyTo).toMatch(/^r-/);
@@ -254,9 +256,22 @@ describe("any coach, by email (no directory)", () => {
     expect(r!.status).toBe("coach_notified");
     expect(r!.sport).toBe("Basketball (M)");
     expect(r!.target_school).toBe("Jordan Smith");
-    expect(mails(deps, "jsmith@stateu.example.edu")[0]!.subject).toMatch(/sent you a question — answer in one tap/);
+    expect(mails(deps, "jsmith@stateu.example.edu")[0]!.subject).toBe("Question from Taylor Brooks (2027 PG)");
     expect((await deps.store.getCoachBySlug("jordan-smith"))!.sport).toBe("Basketball (M)");
     expect(await deps.store.suggestSchools("jordan", 10)).toEqual([]);
     expect((await deps.store.searchCoaches({ q: "Jordan", limit: 10 })).coaches).toEqual([]);
+  });
+});
+
+describe("inbox placement", () => {
+  it("no private Reply-To until inbound email is set up (a Reply-To that can't receive mail looks like spam)", async () => {
+    const saved = process.env.INBOUND_WEBHOOK_SECRET;
+    delete process.env.INBOUND_WEBHOOK_SECRET;
+    try {
+      const { deps } = makeDeps();
+      await staff(deps);
+      await place(deps);
+      expect(mails(deps, "rc@example.edu")[0]!.replyTo).toBeUndefined();
+    } finally { process.env.INBOUND_WEBHOOK_SECRET = saved; }
   });
 });
