@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { addCoach, input, makeDeps, paidRequest } from "./helpers";
 import { runCron } from "@/lib/services/cron";
 import { handleUndeliverable, verifySvix } from "@/lib/services/deliverability";
@@ -75,6 +75,8 @@ describe("deliverability", () => {
 });
 
 describe("Resend client under load", () => {
+  // Load the live client once up front: a cold import on a busy machine can outlast the default 5s test timeout.
+  beforeAll(async () => { await import("@/lib/integrations-live"); }, 30_000);
   afterEach(() => vi.unstubAllGlobals());
   it("retries when rate-limited (429) and succeeds", async () => {
     process.env.RESEND_API_KEY = "re_test";
@@ -91,7 +93,7 @@ describe("Resend client under load", () => {
     const r = await new ResendMailer().send({ to: "a@b.co", subject: "s", html: "h", text: "t", idempotencyKey: "k" });
     expect(r.id).toBe("em_1");
     expect(calls).toBe(3);
-  });
+  }, 20_000);
   it("does not retry permanent errors (e.g. invalid address)", async () => {
     process.env.RESEND_API_KEY = "re_test";
     let calls = 0;
@@ -103,5 +105,5 @@ describe("Resend client under load", () => {
     const { ResendMailer } = await import("@/lib/integrations-live");
     await expect(new ResendMailer().send({ to: "bad", subject: "s", html: "h", text: "t" })).rejects.toThrow(/422/);
     expect(calls).toBe(1);
-  });
+  }, 20_000);
 });

@@ -17,9 +17,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-dvh bg-surface">
       <header className="sticky top-0 z-30 border-b border-line bg-white">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 overflow-x-auto px-4 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <Link href="/admin" className="shrink-0"><Logo /></Link>
-          <nav className="flex gap-1 text-sm font-medium">
+          <nav className="order-last -mx-1 flex w-full gap-1 overflow-x-auto text-sm font-medium md:order-none md:mx-0 md:w-auto">
             {NAV.map(([href, label]) => <Link key={href} href={href} className="whitespace-nowrap rounded-lg px-3 py-1.5 hover:bg-surface">{label}</Link>)}
           </nav>
           <form action={logout} className="ml-auto shrink-0"><button className="text-sm text-muted hover:text-navy">Sign out</button></form>

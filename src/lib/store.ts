@@ -42,6 +42,8 @@ export type NewRequest = Omit<
 
 export interface Store {
   getSettings(): Promise<Settings>;
+  /** Migrations whose columns are missing from the live database (empty when up to date). Optional: memory store has none. */
+  pendingMigrations?(): Promise<string[]>;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
 
   getCoach(id: string): Promise<Coach | null>;

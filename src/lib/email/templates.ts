@@ -678,7 +678,7 @@ export function relayMessage(a: { toRole: "coach" | "parent"; fromName: string; 
   return { subject, html, text: `${a.body}\n\n— Hit Reply to answer. (${a.req.ref})\n${a.postalAddress}` };
 }
 
-export function orderReceipt(a: { email: string; name: string; athlete: string; schools: { school: string; price: number }[]; postalAddress: string }): Rendered {
+export function orderReceipt(a: { email: string; name: string; athlete: string; schools: { school: string; price: number }[]; postalAddress: string; texts?: boolean }): Rendered {
   const free = a.schools.every((s) => s.price === 0);
   const rows = a.schools.map((s) => row(esc(s.school), free ? "Sent ✓" : `${money(s.price)} <span style="font-weight:400;color:${MUTED};">hold</span>`));
   const html = layout({
@@ -690,7 +690,7 @@ export function orderReceipt(a: { email: string; name: string; athlete: string; 
       p(free
         ? `If the first coach doesn't answer, we automatically reach the next person on that staff.`
         : `<strong>Answered — or it's free.</strong> Each school is charged only if a coach there answers. If the first coach doesn't, we automatically reach the next person on that staff. No answer in 5 days? That hold is released.`) +
-      p(`We'll text and email you the moment someone answers.`),
+      p(a.texts ? `We'll text and email you the moment someone answers.` : `We'll email you the moment someone answers.`),
     footerHtml: `Questions? Reply to this email.`,
     postalAddress: a.postalAddress,
   });

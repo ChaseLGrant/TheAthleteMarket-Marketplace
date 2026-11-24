@@ -212,9 +212,19 @@ export async function handleCheckoutExpired(deps: Deps, s: { id: string; client_
   const req = s.client_reference_id
     ? await deps.store.getRequest(s.client_reference_id)
     : await deps.store.getRequestBy("stripe_checkout_session_id", s.id);
-  if (!req) return;
-  const r = await deps.store.casRequest(req.id, { status: ["awaiting_payment"] }, { status: "cancelled" });
-  if (r) await event(deps, r, "checkout_expired", "stripe", "awaiting_payment", "cancelled");
+  if (req) {
+    const r = await deps.store.casRequest(req.id, { status: ["awaiting_payment"] }, { status: "cancelled" });
+    if (r) await event(deps, r, "checkout_expired", "stripe", "awaiting_payment", "cancelled");
+    return;
+  }
+  // Coach Line: the setup-mode session belongs to an order (one request per school), not to a single request.
+  const order = await deps.store.getOrderBySession(s.id);
+  if (!order || order.status !== "awaiting_payment") return;
+  await deps.store.updateOrder(order.id, { status: "cancelled" });
+  for (const each of await deps.store.listRequests({ order_id: order.id, limit: 10 })) {
+    const r = await deps.store.casRequest(each.id, { status: ["awaiting_payment"] }, { status: "cancelled" });
+    if (r) await event(deps, r, "checkout_expired", "stripe", "awaiting_payment", "cancelled");
+  }
 }
 
 // ---------------------------------------------------------------------------

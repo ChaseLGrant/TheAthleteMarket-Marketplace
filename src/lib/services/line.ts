@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Deps } from "../deps";
-import { env, paymentsOff } from "../env";
+import { env, paymentsOff, smsEnabled } from "../env";
 import { paidRequestGate } from "../compliance";
 import {
   coachAskInvite, draftConfirmFirstTime, draftConfirmYes, lineSms, orderReceipt, relayMessage,
@@ -161,7 +161,7 @@ export async function handleAskSetupCompleted(deps: Deps, sessionId: string) {
   if (first && sent.length) {
     await sendEmail(deps, {
       to: first.purchaser_email,
-      rendered: orderReceipt({ email: first.purchaser_email, name: first.purchaser_name, athlete: first.athlete_name, schools: sent, postalAddress: env.postalAddress() }),
+      rendered: orderReceipt({ email: first.purchaser_email, name: first.purchaser_name, athlete: first.athlete_name, schools: sent, postalAddress: env.postalAddress(), texts: !!(first.purchaser_phone && first.purchaser_sms_opt_in_at && smsEnabled()) }),
       template: "ask_receipt", idempotencyKey: `ask-receipt-${order.id}`, requestId: first.id,
     }).catch((e) => log("warn", "ask receipt failed", { error: String(e) }));
     if (first.purchaser_phone && first.purchaser_sms_opt_in_at)

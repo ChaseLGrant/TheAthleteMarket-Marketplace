@@ -33,6 +33,19 @@ export class SupabaseStore implements Store {
     const r = await this.db.from("settings").select("*").eq("id", 1).maybeSingle();
     return { ...DEFAULT_SETTINGS, ...(must(r, "settings") ?? {}) } as Settings;
   }
+  async pendingMigrations(): Promise<string[]> {
+    // Probe the newest column each migration adds; "column does not exist" (42703) means it hasn't been run.
+    const probes: [string, string, string][] = [
+      ["0009_free_messages.sql", "saved_payers", "athlete_film_url"],
+      ["0010_fast_bonus.sql", "settings", "fast_bonus_cents"],
+    ];
+    const out: string[] = [];
+    for (const [file, table, col] of probes) {
+      const r = await this.db.from(table).select(col).limit(1);
+      if (r.error && (r.error.code === "42703" || r.error.code === "PGRST204" || /does not exist/i.test(r.error.message))) out.push(file);
+    }
+    return out;
+  }
   async updateSettings(patch: Partial<Settings>): Promise<Settings> {
     must(await this.db.from("settings").update(patch).eq("id", 1), "settings.update");
     return this.getSettings();

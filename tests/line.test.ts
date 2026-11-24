@@ -311,3 +311,20 @@ describe("fast-answer bonus", () => {
     expect((await submitAnswer(deps, (await deps.store.getRequest(r!.id))!, rc, { kind: "update", via: "link" })).coach_payout_cents).toBe(1000);
   });
 });
+
+describe("abandoned Coach Line checkout", () => {
+  it("checkout.session.expired on a setup session cancels the order and every school's request (nobody emailed)", async () => {
+    const { handleCheckoutExpired } = await import("@/lib/services/lifecycle");
+    const { deps } = makeDeps();
+    await staff(deps);
+    await addCoach(deps, { slug: "other", full_name: "Olivia Other", title: "Assistant Coach", school: "State College", sport: "Basketball (M)", email: "o@state.edu" });
+    const { orderId } = await createAskOrder(deps, input({ targets: [{ school: SCHOOL, sport: "Basketball (M)" }, { school: "State College", sport: "Basketball (M)" }] }), { ip: "1.1.1.1" });
+    const order = (await deps.store.getOrder(orderId))!;
+    await handleCheckoutExpired(deps, { id: order.stripe_checkout_session_id!, client_reference_id: null });
+    expect((await deps.store.getOrder(orderId))!.status).toBe("cancelled");
+    expect((await deps.store.listRequests({ order_id: orderId })).map((r) => r.status)).toEqual(["cancelled", "cancelled"]);
+    expect(deps.mailer.sent.length).toBe(0);
+    // Duplicate delivery is a no-op.
+    await handleCheckoutExpired(deps, { id: order.stripe_checkout_session_id!, client_reference_id: null });
+  });
+});

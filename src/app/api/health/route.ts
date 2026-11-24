@@ -21,12 +21,15 @@ export async function GET() {
   const sk = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   const stripeMode = /^(sk|rk)_live_/.test(sk) ? "live" : /^(sk|rk)_test_/.test(sk) ? "test" : sk ? "unknown" : null;
   let db = "unknown";
+  let pendingMigrations: string[] = [];
   try {
-    await (await getDeps()).store.getSettings();
+    const { store } = await getDeps();
+    await store.getSettings();
     db = "ok";
+    pendingMigrations = (await store.pendingMigrations?.().catch(() => [])) ?? [];
   } catch {
     db = "error";
   }
   const ok = db === "ok";
-  return json({ ok, demo: isDemoMode(), db, configured, stripeMode, paymentsOff: paymentsOff(), testInbox: !!env.testInbox(), time: new Date().toISOString() }, ok ? 200 : 503);
+  return json({ ok, demo: isDemoMode(), db, configured, stripeMode, paymentsOff: paymentsOff(), testInbox: !!env.testInbox(), pendingMigrations, time: new Date().toISOString() }, ok ? 200 : 503);
 }

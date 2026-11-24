@@ -78,7 +78,7 @@ export function AskForm(p: {
           <ul className="flex flex-wrap gap-2">
             {targets.map((t, i) => (
               <li key={i} className="flex max-w-full items-center gap-2 rounded-full bg-navy py-1.5 pl-4 pr-1.5 text-sm text-white">
-                <span className="min-w-0 truncate"><strong>{t.label}</strong> <span className="text-white/70">· {t.sub}</span></span>
+                <span className="min-w-0 truncate"><strong>{t.label}</strong>{t.sub ? <span className="text-white/70"> · {t.sub}</span> : null}</span>
                 <button type="button" onClick={() => setTargets(targets.filter((_, j) => j !== i))} aria-label={`Remove ${t.label}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 hover:bg-white/25">×</button>
               </li>
             ))}
