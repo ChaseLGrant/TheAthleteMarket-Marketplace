@@ -293,8 +293,10 @@ export class ResendMailer implements Mailer {
     if (!res.ok || !body.id) {
       const err = new Error(`Resend ${res.status}: ${body.message ?? "unknown error"}`) as Error & { status: number; retryAfter?: number };
       err.status = res.status;
-      const ra = Number(res.headers.get("retry-after"));
-      if (ra > 0) err.retryAfter = ra * 1000;
+      const raHeader = res.headers.get("retry-after");
+      const ra = raHeader === null ? NaN : Number(raHeader);
+      // Honor the server's hint (including "0"), capped so one send never stalls a request for long.
+      if (Number.isFinite(ra) && ra >= 0) err.retryAfter = Math.min(8000, ra * 1000);
       throw err;
     }
     return { id: body.id };
