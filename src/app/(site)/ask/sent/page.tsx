@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { paymentsOff } from "@/lib/env";
+import { inboundEmailEnabled, paymentsOff, smsEnabled } from "@/lib/env";
 import { getDeps } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
@@ -18,12 +18,12 @@ export default async function SentPage({ searchParams }: { searchParams: Promise
       <h1 className="mt-5 text-3xl font-bold tracking-tight">Your message is on its way</h1>
       <p className="mt-2 text-muted">
         {reqs.length ? <>Sent to <strong>{reqs.map((r) => r.target_school).filter(Boolean).join(", ")}</strong>. </> : null}
-        We&apos;ll email you (and text you, if you added a number) the moment a coach opens it and the moment they answer.
+        We&apos;ll email you{smsEnabled() ? " (and text you, if you added a number)" : ""} the moment a coach opens it and the moment they answer.
       </p>
       <ol className="mx-auto mt-8 max-w-sm space-y-3 text-left text-sm">
         <Step n={1}>The right coach on each staff gets your message with one-tap answers.</Step>
         <Step n={2}>No answer in {settings.escalate_after_hours} hours? It moves to the next coach on staff.</Step>
-        <Step n={3}>{paymentsOff() ? "Reply to the answer email (or text) to keep the conversation going." : "You're only charged for schools that answer. Reply to the answer email to keep talking."}</Step>
+        <Step n={3}>{paymentsOff() ? (inboundEmailEnabled() ? "Reply to the answer email to keep the conversation going." : "The answer lands in your inbox.") : `You're only charged for schools that answer.${inboundEmailEnabled() ? " Reply to the answer email to keep talking." : ""}`}</Step>
       </ol>
       <Link href="/ask" className="btn-primary mt-10">Ask more schools</Link>
     </div>

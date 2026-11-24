@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { HeroAsk } from "@/components/hero-ask";
 import { askPricing } from "@/lib/ask-pricing";
-import { paymentsOff } from "@/lib/env";
+import { inboundEmailEnabled, paymentsOff, smsEnabled } from "@/lib/env";
 import { money } from "@/lib/format";
 import { getDeps } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
 
-const STEPS = [
+const stepsFor = (sms: boolean, inbound: boolean) => [
   { n: "1", title: "Pick up to 5 colleges", body: "Type a school. We write the message for you — camp dates, events, what level you fit. Edit anything." },
   { n: "2", title: "We get it to the right coach", body: "It goes to the recruiting coordinator first. No answer? It moves to the next coach on staff automatically." },
-  { n: "3", title: "The answer hits your phone", body: "A text the second they open it and the second they answer. Reply to the email or text to keep talking." },
+  sms
+    ? { n: "3", title: "The answer hits your phone", body: `A text the second they open it and the second they answer.${inbound ? " Reply to the email or text to keep talking." : ""}` }
+    : { n: "3", title: "The answer hits your inbox", body: `An email the moment a coach opens it and the moment they answer.${inbound ? " Reply to keep talking." : ""}` },
 ];
 
 const ANSWERS = [
@@ -40,7 +42,13 @@ export default async function Home() {
   const deps = await getDeps();
   const settings = await deps.store.getSettings();
   const free = paymentsOff();
-  const FAQ = free ? FREE_FAQ : PAID_FAQ;
+  const sms = smsEnabled();
+  const inbound = inboundEmailEnabled();
+  const STEPS = stepsFor(sms, inbound);
+  // Only promise what is switched on: email-in needs inbound mail, "text back" needs Twilio.
+  const FAQ = (free ? FREE_FAQ : PAID_FAQ)
+    .filter((f) => inbound || (f.q !== "Can I use my own email?" && f.q !== "Can I keep talking to the coach?"))
+    .map((f) => (f.q === "Do I need an account or app?" && !sms ? { ...f, a: "No. One page to send, then everything happens in your email." } : f));
   const packs = [1, 3, 5].map((n) => ({ n, total: askPricing(settings.ask_prices, n).total }));
   const coachEarns = Math.round((packs[0]!.total * settings.ask_coach_share_bps) / 10_000);
 
@@ -117,8 +125,8 @@ export default async function Home() {
         </>
       )}
 
-      {/* Gmail */}
-      <section className="container-page pb-16">
+      {/* Gmail (only once inbound email is live) */}
+      {inbound && <section className="container-page pb-16">
         <div className="card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:p-8">
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold">Live in Gmail? Stay there.</h2>
@@ -128,7 +136,7 @@ export default async function Home() {
           </div>
           <Link href="/ask" className="btn-ghost shrink-0">Find a school&apos;s address</Link>
         </div>
-      </section>
+      </section>}
 
       {/* Coaches */}
       <section className="bg-navy text-white">

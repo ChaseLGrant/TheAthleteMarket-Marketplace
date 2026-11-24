@@ -7,7 +7,7 @@ export interface Target { coachSlug?: string; school?: string; sport?: string; l
 interface Suggest { schools: { school: string; sport: string; staff: number; address: string }[]; coaches: { slug: string; name: string; title: string | null; school: string | null; sport: string; address: string }[] }
 
 /** Typeahead: pick a school's staff (recommended) or a specific coach. */
-export function AskBox({ onPick, placeholder = "Type a college — or paste any coach’s email", autoFocus, dark }: {
+export function AskBox({ onPick, placeholder = "College name or coach’s email", autoFocus, dark }: {
   onPick: (t: Target) => void; placeholder?: string; autoFocus?: boolean; dark?: boolean;
 }) {
   const [q, setQ] = useState("");

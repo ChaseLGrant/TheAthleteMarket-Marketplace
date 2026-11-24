@@ -79,7 +79,9 @@ describe("Resend client under load", () => {
   it("retries when rate-limited (429) and succeeds", async () => {
     process.env.RESEND_API_KEY = "re_test";
     let calls = 0;
-    vi.stubGlobal("fetch", vi.fn(async () => {
+    // Count only Resend calls: stray background fetches from earlier tests must not skew the count.
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown) => {
+      if (!String(url).includes("api.resend.com")) return new Response("{}", { status: 200 });
       calls++;
       return calls < 3
         ? new Response(JSON.stringify({ message: "rate limited" }), { status: 429, headers: { "retry-after": "0" } })
@@ -93,7 +95,11 @@ describe("Resend client under load", () => {
   it("does not retry permanent errors (e.g. invalid address)", async () => {
     process.env.RESEND_API_KEY = "re_test";
     let calls = 0;
-    vi.stubGlobal("fetch", vi.fn(async () => { calls++; return new Response(JSON.stringify({ message: "invalid to" }), { status: 422 }); }));
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown) => {
+      if (!String(url).includes("api.resend.com")) return new Response("{}", { status: 200 });
+      calls++;
+      return new Response(JSON.stringify({ message: "invalid to" }), { status: 422 });
+    }));
     const { ResendMailer } = await import("@/lib/integrations-live");
     await expect(new ResendMailer().send({ to: "bad", subject: "s", html: "h", text: "t" })).rejects.toThrow(/422/);
     expect(calls).toBe(1);

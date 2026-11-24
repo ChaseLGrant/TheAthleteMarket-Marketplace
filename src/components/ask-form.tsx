@@ -19,7 +19,7 @@ const dollars = (c: number) => "$" + (c % 100 ? (c / 100).toFixed(2) : c / 100);
 
 export function AskForm(p: {
   prices: Record<string, number>; escalateHours: number; deadlineDays: number;
-  initialTargets?: Target[]; prefill?: Record<string, string>; draftToken?: string; free?: boolean;
+  initialTargets?: Target[]; prefill?: Record<string, string>; draftToken?: string; free?: boolean; sms?: boolean; inbound?: boolean;
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(submitAsk, {});
   const v = state.values ?? p.prefill ?? {};
@@ -140,9 +140,9 @@ export function AskForm(p: {
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <In label={minor === "yes" ? "Parent/guardian name" : "Your name"} name="purchaserName" defaultValue={v.purchaserName} error={err.purchaserName} autoComplete="name" />
-          <In label="Email" name="purchaserEmail" type="email" defaultValue={v.purchaserEmail} error={err.purchaserEmail} autoComplete="email" hint="Answers land here. Reply to keep the conversation going." />
+          <In label="Email" name="purchaserEmail" type="email" defaultValue={v.purchaserEmail} error={err.purchaserEmail} autoComplete="email" hint={p.inbound ? "Answers land here. Reply to keep the conversation going." : "Answers land here."} />
         </div>
-        <div>
+        {p.sms !== false && <div>
           <label htmlFor="purchaserPhone" className="label">Mobile — get a text the second a coach answers</label>
           <input id="purchaserPhone" name="purchaserPhone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" className="field" />
           {phone.trim() && (
@@ -151,7 +151,7 @@ export function AskForm(p: {
               <span>Text me when coaches open and answer. You can text back to reply to the coach. Msg &amp; data rates may apply. Reply STOP to opt out.</span>
             </label>
           )}
-        </div>
+        </div>}
       </fieldset>
 
       <fieldset className="space-y-3 rounded-2xl bg-surface p-4">

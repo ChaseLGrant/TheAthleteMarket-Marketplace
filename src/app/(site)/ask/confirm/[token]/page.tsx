@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Target } from "@/components/ask-box";
 import { AskForm } from "@/components/ask-form";
 import { Notice } from "@/components/ui";
-import { paymentsOff } from "@/lib/env";
+import { paymentsOff, smsEnabled, inboundEmailEnabled } from "@/lib/env";
 import { getDeps } from "@/lib/server";
 import { askPrices, resolveDraftToken } from "@/lib/services/line";
 
@@ -35,7 +35,7 @@ export default async function ConfirmDraft({ params }: { params: Promise<{ token
       <h1 className="mt-2 text-3xl font-bold tracking-tight">We got your email — one step to send it</h1>
       <div className="mt-4"><Notice tone="success" title="Your message is filled in">Add the athlete&apos;s details once. Next time, just email us and reply YES.</Notice></div>
       <div className="card mt-8 min-w-0 p-5 sm:p-8">
-        <AskForm prices={askPrices(settings)} free={paymentsOff()} escalateHours={settings.escalate_after_hours} deadlineDays={settings.deadline_days}
+        <AskForm prices={askPrices(settings)} free={paymentsOff()} sms={smsEnabled()} inbound={inboundEmailEnabled()} escalateHours={settings.escalate_after_hours} deadlineDays={settings.deadline_days}
           initialTargets={targets} draftToken={token}
           prefill={{ message: draft.message, filmUrl: draft.film_url ?? "", purchaserEmail: draft.from_email, sport: draft.target_sport ?? coach?.sport ?? "" }} />
       </div>

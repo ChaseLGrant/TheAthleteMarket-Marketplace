@@ -36,6 +36,15 @@ export function paymentsOff(): boolean {
   return !isDemoMode() && !process.env.STRIPE_SECRET_KEY?.trim();
 }
 
+/** Coach/parent replies by email work only once inbound email (Postmark → /api/inbound/postmark) is configured. */
+export function inboundEmailEnabled(): boolean {
+  return !!process.env.INBOUND_WEBHOOK_SECRET?.trim();
+}
+/** Texts (alerts, two-way relay) work only once Twilio is configured. */
+export function smsEnabled(): boolean {
+  return isDemoMode() || !!env.twilio();
+}
+
 export const env = {
   siteUrl: () => (opt("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
   mainSiteUrl: () => opt("NEXT_PUBLIC_MAIN_SITE_URL") ?? "https://theathletemarket.com",

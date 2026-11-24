@@ -1,3 +1,4 @@
+import { smsEnabled } from "@/lib/env";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -15,7 +16,7 @@ export default async function Success({ searchParams }: { searchParams: Promise<
       </p>
       <ol className="card mt-8 space-y-4 p-6 text-left text-sm">
         <li><strong>Now</strong> — the coach gets your film and details by email.</li>
-        <li><strong>When they reply</strong> — it lands in your inbox (and we text you if you added your number). Only then is your card charged.</li>
+        <li><strong>When they reply</strong> — it lands in your inbox{smsEnabled() ? " (and we text you if you added your number)" : ""}. Only then is your card charged.</li>
         <li><strong>No reply in 5 days?</strong> — the hold is released and we&apos;ll help you ask another coach in one tap.</li>
       </ol>
       <Link href="/coaches" className="btn-ghost mt-8">Browse more coaches</Link>

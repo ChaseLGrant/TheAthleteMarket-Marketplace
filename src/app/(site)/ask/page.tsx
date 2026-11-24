@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AskForm } from "@/components/ask-form";
 import { Notice } from "@/components/ui";
-import { paymentsOff } from "@/lib/env";
+import { paymentsOff, smsEnabled, inboundEmailEnabled } from "@/lib/env";
 import { getDeps } from "@/lib/server";
 import { resolveAgainLink } from "@/lib/services/access";
 import { askPrices } from "@/lib/services/line";
@@ -25,7 +25,7 @@ export default async function AskPage({ searchParams }: P) {
       {original && <div className="mt-4"><Notice tone="success" title="Welcome back">{original.athlete_name}&apos;s details are filled in. Just pick the next schools.</Notice></div>}
       {sp.cancelled && <div className="mt-4"><Notice tone="warn">Checkout was cancelled — nothing was sent and you weren&apos;t charged.</Notice></div>}
       <div className="card mt-8 min-w-0 p-5 sm:p-8">
-        <AskForm prices={askPrices(settings)} free={paymentsOff()} escalateHours={settings.escalate_after_hours} deadlineDays={settings.deadline_days}
+        <AskForm prices={askPrices(settings)} free={paymentsOff()} sms={smsEnabled()} inbound={inboundEmailEnabled()} escalateHours={settings.escalate_after_hours} deadlineDays={settings.deadline_days}
           initialTargets={targets} prefill={original ? prefillFromRequest(original) : undefined} />
       </div>
     </div>
