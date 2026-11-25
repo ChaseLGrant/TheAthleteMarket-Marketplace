@@ -5,7 +5,7 @@ import { coachInvite } from "../email/templates";
 import { log } from "../log";
 import { videoDeletable } from "../retention";
 import { coachDeclineUrl, coachReviewUrl, hubUrl, unsubscribeUrl } from "./links";
-import { sendEmail } from "./notify";
+import { alertAdmin, sendEmail } from "./notify";
 import { attemptPayout, capturePayment, completeRequest, notifyCoach, refundRequest, textCoach } from "./lifecycle";
 import { sendWeeklySummaries } from "./experience";
 import { coachDigest, sms as smsText } from "../email/templates";
@@ -26,7 +26,7 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
   const outOfTime = () => Date.now() - startedAt > (opts.budgetMs ?? 50_000);
   const nowIso = now.toISOString();
   const settings = await deps.store.getSettings();
-  const out = { partial: false, escalated: 0, notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
+  const out = { partial: false, unopenedAlerts: 0, escalated: 0, notified: 0, expired: 0, refundsRetried: 0, payoutsRetried: 0, reconciled: 0, reminders: 0, weeklySummaries: 0, cancelled: 0, videosDeleted: 0, purged: 0, errors: 0 };
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try { await fn(); } catch (e) { out.errors++; log("error", `cron:${label}`, { error: String(e) }); }
   };
@@ -84,6 +84,27 @@ export async function runCron(deps: Deps, opts: { budgetMs?: number } = {}) {
       if (await capturePayment(deps, r.id) && !settings.require_admin_review) await completeRequest(deps, r.id, "cron");
     });
   }
+
+  // 4b. Delivery watch: a coach who hasn't opened a message within 24h may never have seen it (school spam
+  //     filters). Tell the owner once per message, so nothing fails silently.
+  await safe("unopened", async () => {
+    const cutoff = now.getTime() - 24 * HOUR;
+    const stale = (await deps.store.listRequests({ status: ["coach_notified"], limit: 500 }))
+      .filter((r) => r.format === "ask" && !r.coach_viewed_at && r.coach_notified_at && Date.parse(r.coach_notified_at) < cutoff);
+    const fresh: string[] = [];
+    for (const r of stale) {
+      const first = await deps.store.claimMessage({ channel: "email", dedupe_key: `unopened-alert-${r.id}`, request_id: r.id, coach_id: r.coach_id, to_email: "admin", template: "unopened_alert", subject: r.ref, provider_id: null, status: "sent", error: null }).catch(() => false);
+      if (!first) continue;
+      const coach = await deps.store.getCoach(r.coach_id);
+      fresh.push(`${r.ref} · ${r.athlete_name} → ${coach?.full_name ?? "coach"} <${coach?.email ?? "?"}> (${r.target_school ?? ""}) — sent ${Math.round((now.getTime() - Date.parse(r.coach_notified_at!)) / HOUR)}h ago, not opened`);
+    }
+    if (fresh.length) {
+      await alertAdmin(deps, `${fresh.length} coach message${fresh.length === 1 ? "" : "s"} not opened after 24 hours`, [
+        ...fresh, "", "These may be sitting in a school spam or quarantine folder. Follow-ups and the next coach on staff are automatic.",
+      ]);
+    }
+    out.unopenedAlerts = fresh.length;
+  });
 
   // 4c. Coach Line: escalate unanswered messages to the next person on that school's staff.
   await safe("escalate", async () => { out.escalated = await escalateAsks(deps); });

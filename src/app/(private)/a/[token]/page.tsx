@@ -80,7 +80,7 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
       </div>
       <div className="card p-5">
         <h2 className="mb-3 text-lg font-bold">Your answer · about 2 minutes</h2>
-        <AnswerForm token={token} first={first} amount={amount} camps={coach.camps ?? []} events={coach.events ?? []} initialKind={initialKind} payoutUrl={payoutUrl} sport={req.sport} position={req.position} coachLast={coach.full_name.split(" ").slice(-1)[0] ?? ""}
+        <AnswerForm token={token} first={first} amount={amount} camps={coach.camps ?? []} events={coach.events ?? []} initialKind={initialKind} payoutUrl={payoutUrl} sport={req.sport} position={req.position} coachLast={coach.full_name.split(" ").slice(-1)[0] ?? ""} senderEmail={(process.env.EMAIL_FROM ?? "").match(/<([^>]+)>/)?.[1] ?? process.env.EMAIL_FROM ?? undefined}
           canPass={req.escalation_index < req.escalation_ids.length - 1} />
       </div>
     </div>

@@ -19,7 +19,7 @@ const SUMMARY: Record<Kind, string> = {
 
 export function AnswerForm(p: {
   token: string; first: string; amount: string | null; camps: CampItem[]; events: EventItem[]; initialKind?: string; canPass: boolean;
-  payoutUrl?: string | null; sport: string; position: string; coachLast: string;
+  payoutUrl?: string | null; sport: string; position: string; coachLast: string; senderEmail?: string;
 }) {
   const phrases = useMemo(() => phrasesFor(p.sport), [p.sport]);
   const tools = useMemo(() => toolsFor(p.sport, p.position), [p.sport, p.position]);
@@ -87,6 +87,12 @@ export function AnswerForm(p: {
             </>
           : <p className="mt-2 text-sm text-muted">Your {p.amount} is on its way to your bank.</p>)}
         {(kind === "camp" || kind === "event") && save && useNew && <p className="mt-2 text-xs text-muted">Saved — next time it&apos;s one tap.</p>}
+        {p.senderEmail && (
+          <div className="mt-4 rounded-xl bg-white p-3 text-left text-sm ring-1 ring-[#c3e8d2]">
+            <p className="font-semibold">📬 Never miss a paid question</p>
+            <p className="mt-1 text-muted">Add <strong className="text-navy">{p.senderEmail}</strong> to your contacts or safe senders. School email filters sometimes hide messages from new senders.</p>
+          </div>
+        )}
       </div>
     );
   if (state === "passed")

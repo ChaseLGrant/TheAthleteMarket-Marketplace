@@ -360,3 +360,21 @@ describe("report card", () => {
     expect(toolsFor("Baseball", "SS").map((t) => t.label)).toEqual(["Hit", "Power", "Run", "Arm", "Field"]);
   });
 });
+
+describe("delivery watch", () => {
+  it("tells the owner once when a coach hasn't opened a message after 24h", async () => {
+    process.env.ADMIN_ALERT_EMAIL = "owner@example.com";
+    try {
+      const { deps, advance } = makeDeps();
+      await staff(deps);
+      await place(deps);
+      advance(25);
+      await runCron(deps);
+      advance(2);
+      await runCron(deps);
+      const alerts = mails(deps, "owner@example.com").filter((m) => /not opened after 24 hours/.test(m.subject));
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.html).toContain("Rob Recruiter");
+    } finally { delete process.env.ADMIN_ALERT_EMAIL; }
+  });
+});
