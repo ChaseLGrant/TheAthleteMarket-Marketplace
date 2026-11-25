@@ -291,7 +291,8 @@ describe("fast-answer bonus", () => {
     const { rc } = await staff(deps);
     const [fast] = await place(deps);
     const invite = mails(deps, "rc@example.edu")[0]!;
-    expect(invite.html).toContain("Answer in the next 24 hours and you'll be paid $15 ($10 after that).");
+    expect(invite.html).toContain("You'll be paid <strong>$15</strong> for answering this one within 24 hours ($10 after)");
+    expect(invite.html).toContain("pays coaches to answer their questions");
     expect(invite.subject).not.toMatch(/\$/);
     const a = await submitAnswer(deps, (await deps.store.getRequest(fast!.id))!, rc, { kind: "update", via: "link" });
     expect(a.coach_payout_cents).toBe(1500);
@@ -310,7 +311,7 @@ describe("fast-answer bonus", () => {
     deps.store.settings.fast_bonus_cents = 0;
     const { rc } = await staff(deps);
     const [r] = await place(deps);
-    expect(mails(deps, "rc@example.edu")[0]!.html).toContain("You'll be paid $10 for answering.");
+    expect(mails(deps, "rc@example.edu")[0]!.html).toContain("You'll be paid <strong>$10</strong> for answering this one.");
     expect((await submitAnswer(deps, (await deps.store.getRequest(r!.id))!, rc, { kind: "update", via: "link" })).coach_payout_cents).toBe(1000);
   });
 });

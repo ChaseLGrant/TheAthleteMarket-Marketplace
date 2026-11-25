@@ -471,23 +471,27 @@ export function coachAskInvite(a: {
   const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
 <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 <div style="max-width:560px;padding:20px 18px;">
+<div style="margin:0 0 18px;padding:12px 14px;border-radius:10px;background:#F2F6FF;border:1px solid #DCE6FF;font-size:14px;line-height:1.5;color:#1a2b4a;">
+<strong>The Athlete Market</strong> connects high school athletes with college coaches — and <strong>pays coaches to answer their questions</strong>.${total > 0 ? ` You'll be paid <strong>${money(total)}</strong> for answering this one${a.bonus ? ` within ${a.bonus.hoursLeft} hours (${money(a.earnCents)} after)` : ""}.` : ""}
+</div>
 ${P(`Coach ${esc(last)},`)}
 ${P(lead)}
 <div style="margin:0 0 14px;padding:2px 0 2px 14px;border-left:3px solid #d0d7e2;font-size:15px;line-height:1.55;color:#222;white-space:pre-wrap;">${esc(req.message ?? "")}</div>
 ${P(`<strong>${esc(req.athlete_name)}</strong> · ${esc(pos)} · Class of ${esc(req.grad_year)} · ${esc(req.sport)}<br>Film: <a href="${esc(req.film_url)}" style="color:#1F5FFF;">${esc(req.film_url)}</a>`)}
-${P(`You can answer from your phone in about 30 seconds — share camp dates, an event you'll be at, ask for more film, or give your honest read.${pay ? ` <strong>${pay}</strong>` : ""}`)}
+${P(`You can answer from your phone in about a minute — share camp dates, an event you'll be at, what you'd want to see, or your honest read.`)}
 <p style="margin:0 0 18px;"><a href="${esc(a.answerUrl())}" style="display:inline-block;padding:12px 20px;background:#1F5FFF;color:#ffffff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">Answer${total > 0 ? ` &amp; get paid ${money(total)}` : ""}</a></p>
 ${replyEnabled() ? P(`<span style="color:#555;font-size:14px;">Or just reply to this email — your address stays private.</span>`) : ""}
-${P(`Thanks,<br>Chase<br><span style="color:#555;">Coach Line · The Athlete Market</span>`)}
+${P(`Thank you,<br>The Athlete Market`)}
 <p style="margin:22px 0 0;font-size:12px;line-height:1.5;color:#888;">Not the right person? <a href="${esc(a.declineUrl)}" style="color:#888;">Pass it on</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:#888;">Unsubscribe</a><br>${esc(a.postalAddress)}</p>
 </div></body></html>`;
   const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
   const text = [
+    `The Athlete Market connects high school athletes with college coaches — and pays coaches to answer their questions.${total > 0 ? ` You'll be paid ${money(total)} for answering this one.` : ""}`, "",
     `Coach ${last},`, "", strip(lead), "", req.message ?? "", "",
     `${req.athlete_name} · ${pos} · Class of ${req.grad_year} · ${req.sport}`, `Film: ${req.film_url}`, "",
     `Answer from your phone in about 30 seconds.${pay ? ` ${pay}` : ""}`, `Answer: ${a.answerUrl()}`, "",
     ...(replyEnabled() ? ["Or just reply to this email.", ""] : []),
-    "Thanks,", "Chase", "Coach Line · The Athlete Market", "",
+    "Thank you,", "The Athlete Market", "",
     `Not the right person? ${a.declineUrl}`, `Unsubscribe: ${a.unsubscribeUrl}`, a.postalAddress,
   ].join("\n");
   return { subject, html, text };
