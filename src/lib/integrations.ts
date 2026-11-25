@@ -68,6 +68,8 @@ export interface EmailMessage {
   headers?: Record<string, string>;
   /** Per-message Reply-To (e.g. the request's private reply address). */
   replyTo?: string;
+  /** "coach" = email to a coach: sent from the real Microsoft 365 mailbox when configured (school email trusts it). */
+  audience?: "coach" | "family";
 }
 export interface Mailer {
   send(m: EmailMessage): Promise<{ id: string }>;

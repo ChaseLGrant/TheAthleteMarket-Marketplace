@@ -70,6 +70,11 @@ export const env = {
     return sid && token && (service || from) ? { sid, token, service, from } : null;
   },
   adminAlertPhone: () => opt("ADMIN_ALERT_PHONE"),
+  /** Microsoft 365 (Graph) sender for coach emails — school email trusts mail from a real M365 mailbox. */
+  m365: () => {
+    const tenant = opt("MS_TENANT_ID"), clientId = opt("MS_CLIENT_ID"), secret = opt("MS_CLIENT_SECRET"), sender = opt("MS_SENDER");
+    return tenant && clientId && secret && sender ? { tenant, clientId, secret, sender } : null;
+  },
   /** TEST MODE: when set, EVERY email goes here instead (parents and coaches) — so you can test both sides safely. */
   testInbox: () => opt("TEST_INBOX")?.trim().toLowerCase() || null,
   /** TEST MODE: every text goes to this phone. With TEST_INBOX set and no TEST_PHONE, texts are skipped. */

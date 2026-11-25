@@ -13,6 +13,7 @@ export async function GET() {
     resend: !!process.env.RESEND_API_KEY,
     twilio: !!env.twilio(),
     inboundEmail: !!process.env.INBOUND_WEBHOOK_SECRET,
+    microsoft365CoachEmail: !!env.m365(),
     appSecret: (process.env.APP_SECRET ?? "").length >= 32,
     cronSecret: !!process.env.CRON_SECRET,
     adminPassword: !!process.env.ADMIN_PASSWORD,

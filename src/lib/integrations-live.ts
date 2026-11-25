@@ -303,6 +303,68 @@ export class ResendMailer implements Mailer {
   }
 }
 
+/**
+ * Sends through Microsoft 365 (Microsoft Graph sendMail) from a real mailbox, e.g. chase@theathletemarket.com.
+ * School email (Microsoft 365 / Outlook) trusts this far more than a bulk sending service.
+ * Setup: Entra app registration with the Microsoft Graph *application* permission Mail.Send (admin consent).
+ */
+export class Microsoft365Mailer implements Mailer {
+  private token: { value: string; exp: number } | null = null;
+  constructor(private cfg: { tenant: string; clientId: string; secret: string; sender: string }, private fetchImpl: typeof fetch = fetch) {}
+
+  private async accessToken() {
+    if (this.token && this.token.exp > Date.now() + 60_000) return this.token.value;
+    const res = await this.fetchImpl(`https://login.microsoftonline.com/${encodeURIComponent(this.cfg.tenant)}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: this.cfg.clientId, client_secret: this.cfg.secret, scope: "https://graph.microsoft.com/.default", grant_type: "client_credentials" }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string };
+    if (!res.ok || !j.access_token) throw Object.assign(new Error(`Microsoft 365 sign-in failed: ${j.error_description?.split("\r\n")[0] ?? res.status}`), { status: res.status });
+    this.token = { value: j.access_token, exp: Date.now() + (j.expires_in ?? 3600) * 1000 };
+    return this.token.value;
+  }
+
+  async send(m: EmailMessage) {
+    for (let attempt = 1; ; attempt++) {
+      const res = await this.fetchImpl(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(this.cfg.sender)}/sendMail`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${await this.accessToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject: m.subject,
+            body: { contentType: "HTML", content: m.html },
+            toRecipients: [{ emailAddress: { address: m.to } }],
+            ...(m.replyTo || env.emailReplyTo() ? { replyTo: [{ emailAddress: { address: m.replyTo ?? env.emailReplyTo()! } }] } : {}),
+          },
+          saveToSentItems: true,
+        }),
+      });
+      if (res.status === 202) return { id: `m365-${res.headers.get("request-id") ?? Date.now()}` };
+      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      // Throttled (429) or temporary error → back off and retry a few times.
+      if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+        const ra = Number(res.headers.get("retry-after"));
+        await new Promise((r) => setTimeout(r, Number.isFinite(ra) && ra > 0 ? Math.min(10_000, ra * 1000) : 500 * 2 ** attempt));
+        continue;
+      }
+      throw Object.assign(new Error(`Microsoft 365 ${res.status}: ${body.error?.message ?? "send failed"}`), { status: res.status });
+    }
+  }
+}
+
+/** Coach emails → Microsoft 365 (falls back to Resend if Microsoft fails); everything else → Resend. */
+export class RoutingMailer implements Mailer {
+  constructor(private coach: Mailer | null, private main: Mailer, private onFallback?: (e: unknown) => void) {}
+  async send(m: EmailMessage) {
+    if (m.audience === "coach" && this.coach) {
+      try { return await this.coach.send(m); }
+      catch (e) { this.onFallback?.(e); }
+    }
+    return this.main.send(m);
+  }
+}
+
 /** Twilio Programmable Messaging (A2P 10DLC-registered Messaging Service recommended). */
 export class TwilioSms implements Sms {
   get enabled() { return !!env.twilio(); }

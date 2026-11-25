@@ -1,4 +1,4 @@
-import { isDemoMode, paymentsOff } from "./env";
+import { env, isDemoMode, paymentsOff } from "./env";
 import type { Mailer, Payments, Sms, VideoStorage } from "./integrations";
 import type { Store } from "./store";
 
@@ -63,7 +63,11 @@ export async function getDeps(): Promise<Deps> {
     g.__tamLive = {
       store: new SupabaseStore(),
       payments: paymentsOff() ? new (await import("./integrations-free")).FreePayments() : new live.StripePayments(),
-      mailer: new live.ResendMailer(),
+      mailer: new live.RoutingMailer(
+        env.m365() ? new live.Microsoft365Mailer(env.m365()!) : null,
+        new live.ResendMailer(),
+        (e) => console.error(JSON.stringify({ level: "error", msg: "Microsoft 365 send failed — used Resend instead", error: String(e) })),
+      ),
       storage: new live.SupabaseVideoStorage(),
       sms: new live.TwilioSms(),
       now: () => new Date(),

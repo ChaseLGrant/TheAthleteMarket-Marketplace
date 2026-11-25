@@ -50,6 +50,8 @@ export async function sendEmail(
     headers["List-Unsubscribe"] = `<${unsub.replace("/unsubscribe/", "/api/unsubscribe/")}>`;
     headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
   }
+  // Any email to a coach takes the coach route (sent from the real Microsoft 365 mailbox when set up).
+  const audience: "coach" | "family" = a.coachId || (await deps.store.findCoachesByEmail(a.to).catch(() => [])).length ? "coach" : "family";
   try {
     const { id } = await deps.mailer.send({
       to: a.to,
@@ -59,6 +61,7 @@ export async function sendEmail(
       idempotencyKey: a.idempotencyKey,
       headers,
       replyTo: a.replyTo,
+      audience,
     });
     await deps.store.logEmail({ ...base, provider_id: id, status: "sent", error: null });
     return "sent";
