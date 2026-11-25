@@ -67,7 +67,10 @@ describe("asking", () => {
     expect(invite.subject).not.toMatch(/\$/); // no money in subjects (spam filters)
     expect(invite.html).toContain("$10");
     expect(invite.html).toContain("/a/");
-    expect(invite.html).toContain("Invite to camp");
+    // Deliverability: plain personal-looking email — no images, at most 4 links.
+    expect(invite.html).not.toMatch(/<img/i);
+    expect((invite.html.match(/<a /g) ?? []).length).toBeLessThanOrEqual(4);
+    expect(invite.html).toContain("Coach Recruiter,");
     expect(invite.replyTo).toMatch(/^r-/);
     expect(texts(deps, "+15550001111")[0]).toMatch(/Answer in one tap/);
     expect(mails(deps, "morgan@example.com").some((m) => m.subject.startsWith("Sent!"))).toBe(true);
@@ -288,7 +291,7 @@ describe("fast-answer bonus", () => {
     const { rc } = await staff(deps);
     const [fast] = await place(deps);
     const invite = mails(deps, "rc@example.edu")[0]!;
-    expect(invite.html).toContain("Answer in the next 24 hours: earn $15");
+    expect(invite.html).toContain("Answer in the next 24 hours and you'll be paid $15 ($10 after that).");
     expect(invite.subject).not.toMatch(/\$/);
     const a = await submitAnswer(deps, (await deps.store.getRequest(fast!.id))!, rc, { kind: "update", via: "link" });
     expect(a.coach_payout_cents).toBe(1500);
@@ -307,7 +310,7 @@ describe("fast-answer bonus", () => {
     deps.store.settings.fast_bonus_cents = 0;
     const { rc } = await staff(deps);
     const [r] = await place(deps);
-    expect(mails(deps, "rc@example.edu")[0]!.html).toContain("You get paid $10 for answering");
+    expect(mails(deps, "rc@example.edu")[0]!.html).toContain("You'll be paid $10 for answering.");
     expect((await submitAnswer(deps, (await deps.store.getRequest(r!.id))!, rc, { kind: "update", via: "link" })).coach_payout_cents).toBe(1000);
   });
 });

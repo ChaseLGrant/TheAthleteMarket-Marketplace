@@ -436,14 +436,6 @@ export function adminAlert(a: { title: string; lines: string[]; url?: string; po
 
 /* ═════════════════════════════ Coach Line ═════════════════════════════ */
 
-const ANSWER_BUTTONS: { kind: string; label: string; sub: string }[] = [
-  { kind: "camp", label: "🏕️ Invite to camp", sub: "Your saved camp dates are filled in" },
-  { kind: "event", label: "📍 We'll be at an event", sub: "Tournament / showcase you'll attend" },
-  { kind: "film", label: "🎥 Send more film", sub: "Ask for a full game or more clips" },
-  { kind: "update", label: "📅 Keep me updated", sub: "Check back after the season" },
-  { kind: "level", label: "↪️ Better fit at another level", sub: "Point them to D2 / D3 / NAIA / JUCO" },
-  { kind: "personal", label: "✍️ Write a personal reply", sub: "A sentence or two in your words" },
-];
 
 export function coachAskInvite(a: {
   req: EvalRequest; coach: Coach; answerUrl: (kind?: string) => string; declineUrl: string; unsubscribeUrl: string; hubUrl: string;
@@ -451,10 +443,9 @@ export function coachAskInvite(a: {
   /** Fast-answer bonus still available: extra cents, and hours left to earn it. */
   bonus?: { cents: number; hoursLeft: number };
 }): Rendered {
+  // Deliverability first: school mail (Microsoft 365 / Google) junks designed, link-heavy email from new
+  // senders. This one looks like a normal personal email — no images, plain styling, only 4 links.
   const { req, coach } = a;
-  const who = `${req.athlete_name} (${req.grad_year} ${req.position})`;
-  // Inbox placement: no money or "answer in one tap" in the subject — school spam filters (Outlook) junk
-  // payment-sounding subjects. It reads like a normal recruiting email; the $ is inside.
   const pos = req.position.length <= 4 ? req.position.toUpperCase() : req.position;
   const about = req.target_school && req.target_school !== coach.full_name ? ` about ${req.target_school}` : "";
   const subject = a.reminder?.nudge
@@ -462,40 +453,43 @@ export function coachAskInvite(a: {
     : a.reminder
     ? `Re: question from ${req.athlete_name} (${req.grad_year} ${pos})`
     : `Question${about} from ${req.athlete_name} (${req.grad_year} ${pos})`;
-  const buttons = ANSWER_BUTTONS.map(
-    (b) => `<tr><td style="padding:0 0 8px;"><a href="${esc(a.answerUrl(b.kind))}" style="display:block;padding:12px 14px;border:1px solid #DCE6FF;border-radius:12px;background:#F6F9FF;text-decoration:none;color:${NAVY};"><span style="font-size:15px;font-weight:700;">${b.label}</span><br><span style="font-size:12.5px;color:${MUTED};">${b.sub}</span></a></td></tr>`,
-  ).join("");
-  const html = layout({
-    preheader: `“${(req.message ?? "").slice(0, 90)}…” — answer in one tap from your phone.`,
-    heading: a.escalated ? `${req.athlete_name} is hoping to hear from your staff` : `A recruit asked about your program`,
-    bodyHtml:
-      // The pay, front and center (kept out of the subject line so school spam filters don't junk it).
-      (a.earnCents > 0
-        ? `<div style="margin:0 0 16px;padding:14px 16px;border-radius:14px;background:#E9F7EF;border:1px solid #BFE6CE;color:#0A5C2F;">` +
-          (a.bonus
-            ? `<div style="font-size:18px;font-weight:800;">💵 Answer in the next ${a.bonus.hoursLeft} hours: earn ${money(a.earnCents + a.bonus.cents)}</div>` +
-              `<div style="font-size:14px;margin-top:4px;">Fast-answer bonus (+${money(a.bonus.cents)}). After that, ${money(a.earnCents)}. Tap one answer below — about 30 seconds. Paid straight to your bank through Stripe.</div></div>`
-            : `<div style="font-size:18px;font-weight:800;">💵 You get paid ${money(a.earnCents)} for answering</div>` +
-              `<div style="font-size:14px;margin-top:4px;">Tap one answer below — about 30 seconds. Paid straight to your bank through Stripe.</div></div>`)
-        : "") +
-      table([
-        row("Athlete", `${esc(req.athlete_name)} · ${esc(req.position)} · Class of ${esc(req.grad_year)}`),
-        row("Sport", esc(req.sport)),
-        row("Film", `<a href="${esc(req.film_url)}" style="color:${BLUE};">Watch film ↗</a>`),
-        ...(a.earnCents > 0 ? [row("You earn", `<span style="color:#0A7A3E;">${a.bonus ? `${money(a.earnCents + a.bonus.cents)} within ${a.bonus.hoursLeft}h · ${money(a.earnCents)} after` : `${money(a.earnCents)} when you answer`}</span>`)] : []),
-        row("Answer by", esc(dateOnly(req.expires_at))),
-      ]) +
-      `<div style="margin:14px 0;padding:14px 16px;border-left:3px solid ${BLUE};background:#F4F6FB;border-radius:0 12px 12px 0;font-size:15px;line-height:1.6;color:${NAVY};white-space:pre-wrap;">${esc(req.message ?? "")}</div>` +
-      p(`<strong>Answer in one tap${a.earnCents > 0 ? ` and earn ${money(a.earnCents + (a.bonus?.cents ?? 0))}` : ""}:</strong>`) +
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${buttons}</table>` +
-      (replyEnabled() ? p(`<span style="font-size:13px;color:${MUTED};">On your phone? You can also just <strong>hit Reply</strong> and type <strong>CAMP</strong>, <strong>EVENT</strong>, <strong>FILM</strong>, <strong>UPDATE</strong>, <strong>LEVEL D2</strong> — or any message. Your email address is never shown to the family.</span>`) : "") +
-      (!coach.camps?.length ? p(`<span style="font-size:13px;color:${MUTED};">Tip: <a href="${esc(a.hubUrl)}" style="color:${BLUE};">save your camp dates once</a> and every camp invite fills itself in.</span>`) : ""),
-    footerHtml: `Sent through The Athlete Market Coach Line. Not for you? <a href="${esc(a.declineUrl)}" style="color:${MUTED};">Pass on this one</a> · <a href="${esc(a.hubUrl)}" style="color:${MUTED};">Pause messages</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:${MUTED};">Never email me again</a>.`,
-    postalAddress: a.postalAddress,
-  });
-  const text = [subject, "", ...(a.earnCents > 0 ? [a.bonus ? `Answer in the next ${a.bonus.hoursLeft} hours and earn ${money(a.earnCents + a.bonus.cents)} (${money(a.earnCents)} after that) — one tap, about 30 seconds.` : `You get paid ${money(a.earnCents)} for answering — one tap, about 30 seconds.`, ""] : []), req.message ?? "", "", `Film: ${req.film_url}`, "",
-    ...ANSWER_BUTTONS.map((b) => `${b.label.replace(/^\S+\s/, "")}: ${a.answerUrl(b.kind)}`), "",
-    ...(replyEnabled() ? ["Or hit Reply and type CAMP / EVENT / FILM / UPDATE / LEVEL D2 / any message."] : []), `Pass: ${a.declineUrl}`, `Stop emails: ${a.unsubscribeUrl}`, a.postalAddress].join("\n");
+  const last = coach.full_name.split(" ").slice(-1)[0];
+  const total = a.earnCents + (a.bonus?.cents ?? 0);
+  const pay = a.earnCents > 0
+    ? a.bonus
+      ? `Answer in the next ${a.bonus.hoursLeft} hours and you'll be paid ${money(total)} (${money(a.earnCents)} after that).`
+      : `You'll be paid ${money(a.earnCents)} for answering.`
+    : "";
+  const lead = a.reminder?.nudge
+    ? `Just following up — ${esc(req.athlete_name.split(" ")[0])}'s family is still hoping to hear from you.`
+    : a.reminder
+    ? `${a.reminder.daysLeft} day${a.reminder.daysLeft === 1 ? "" : "s"} left to answer ${esc(req.athlete_name)}'s question.`
+    : a.escalated
+    ? `${esc(req.athlete_name)}'s family is hoping to hear from someone on your staff${about ? `${esc(about.replace(" about", " at"))}` : ""}.`
+    : `A family just reached out${esc(about)} through Coach Line:`;
+  const P = (h: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#111;">${h}</p>`;
+  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<div style="max-width:560px;padding:20px 18px;">
+${P(`Coach ${esc(last)},`)}
+${P(lead)}
+<div style="margin:0 0 14px;padding:2px 0 2px 14px;border-left:3px solid #d0d7e2;font-size:15px;line-height:1.55;color:#222;white-space:pre-wrap;">${esc(req.message ?? "")}</div>
+${P(`<strong>${esc(req.athlete_name)}</strong> · ${esc(pos)} · Class of ${esc(req.grad_year)} · ${esc(req.sport)}<br>Film: <a href="${esc(req.film_url)}" style="color:#1F5FFF;">${esc(req.film_url)}</a>`)}
+${P(`You can answer from your phone in about 30 seconds — share camp dates, an event you'll be at, ask for more film, or give your honest read.${pay ? ` <strong>${pay}</strong>` : ""}`)}
+<p style="margin:0 0 18px;"><a href="${esc(a.answerUrl())}" style="display:inline-block;padding:12px 20px;background:#1F5FFF;color:#ffffff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">Answer${total > 0 ? ` &amp; get paid ${money(total)}` : ""}</a></p>
+${replyEnabled() ? P(`<span style="color:#555;font-size:14px;">Or just reply to this email — your address stays private.</span>`) : ""}
+${P(`Thanks,<br>Chase<br><span style="color:#555;">Coach Line · The Athlete Market</span>`)}
+<p style="margin:22px 0 0;font-size:12px;line-height:1.5;color:#888;">Not the right person? <a href="${esc(a.declineUrl)}" style="color:#888;">Pass it on</a> · <a href="${esc(a.unsubscribeUrl)}" style="color:#888;">Unsubscribe</a><br>${esc(a.postalAddress)}</p>
+</div></body></html>`;
+  const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+  const text = [
+    `Coach ${last},`, "", strip(lead), "", req.message ?? "", "",
+    `${req.athlete_name} · ${pos} · Class of ${req.grad_year} · ${req.sport}`, `Film: ${req.film_url}`, "",
+    `Answer from your phone in about 30 seconds.${pay ? ` ${pay}` : ""}`, `Answer: ${a.answerUrl()}`, "",
+    ...(replyEnabled() ? ["Or just reply to this email.", ""] : []),
+    "Thanks,", "Chase", "Coach Line · The Athlete Market", "",
+    `Not the right person? ${a.declineUrl}`, `Unsubscribe: ${a.unsubscribeUrl}`, a.postalAddress,
+  ].join("\n");
   return { subject, html, text };
 }
 
