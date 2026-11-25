@@ -1,4 +1,5 @@
 import { env } from "../env";
+import { gamePlan, grade, thankYouNote, type ReportLine } from "../coach-take";
 import { money, dateOnly } from "../format";
 import type { Coach, EvalRequest } from "../types";
 
@@ -478,7 +479,7 @@ ${P(`Coach ${esc(last)},`)}
 ${P(lead)}
 <div style="margin:0 0 14px;padding:2px 0 2px 14px;border-left:3px solid #d0d7e2;font-size:15px;line-height:1.55;color:#222;white-space:pre-wrap;">${esc(req.message ?? "")}</div>
 ${P(`<strong>${esc(req.athlete_name)}</strong> · ${esc(pos)} · Class of ${esc(req.grad_year)} · ${esc(req.sport)}<br>Film: <a href="${esc(req.film_url)}" style="color:#1F5FFF;">${esc(req.film_url)}</a>`)}
-${P(`You can answer from your phone in about a minute — share camp dates, an event you'll be at, what you'd want to see, or your honest read.`)}
+${P(`Answering takes about 2 minutes on your phone: a quick 1–10 report card, one thing that stood out, one thing to work on, and a next step (camp, an event, more film or your honest level read).`)}
 <p style="margin:0 0 18px;"><a href="${esc(a.answerUrl())}" style="display:inline-block;padding:12px 20px;background:#1F5FFF;color:#ffffff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">Answer${total > 0 ? ` &amp; get paid ${money(total)}` : ""}</a></p>
 ${replyEnabled() ? P(`<span style="color:#555;font-size:14px;">Or just reply to this email — your address stays private.</span>`) : ""}
 ${P(`Thank you,<br>The Athlete Market`)}
@@ -489,7 +490,7 @@ ${P(`Thank you,<br>The Athlete Market`)}
     `The Athlete Market connects high school athletes with college coaches — and pays coaches to answer their questions.${total > 0 ? ` You'll be paid ${money(total)} for answering this one.` : ""}`, "",
     `Coach ${last},`, "", strip(lead), "", req.message ?? "", "",
     `${req.athlete_name} · ${pos} · Class of ${req.grad_year} · ${req.sport}`, `Film: ${req.film_url}`, "",
-    `Answer from your phone in about 30 seconds.${pay ? ` ${pay}` : ""}`, `Answer: ${a.answerUrl()}`, "",
+    `Answer from your phone in about 2 minutes: a quick report card and your next step for them.${pay ? ` ${pay}` : ""}`, `Answer: ${a.answerUrl()}`, "",
     ...(replyEnabled() ? ["Or just reply to this email.", ""] : []),
     "Thank you,", "The Athlete Market", "",
     `Not the right person? ${a.declineUrl}`, `Unsubscribe: ${a.unsubscribeUrl}`, a.postalAddress,
@@ -626,19 +627,50 @@ export function parentAnswer(a: {
   const letter = personalAnswer(req, coach);
   const last = coach.full_name.split(" ").slice(-1)[0];
   const sig = `<p style="margin:18px 0 0;font-size:15px;line-height:1.5;color:${NAVY};">— Coach ${esc(last)}<br><span style="color:${MUTED};font-size:14px;">${esc([coach.full_name, coach.title, school].filter(Boolean).join(" · "))}</span></p>`;
+  const pl2 = (req.answer_payload ?? {}) as Record<string, unknown>;
+  const liked = typeof pl2.liked === "string" ? pl2.liked : null;
+  const workOn = typeof pl2.workOn === "string" ? pl2.workOn : null;
+  const report = (Array.isArray(pl2.report) ? pl2.report : []) as ReportLine[];
+  const hours = req.paid_at && req.submitted_at ? Math.max(0, (Date.parse(req.submitted_at) - Date.parse(req.paid_at)) / 3_600_000) : null;
+  const speed = hours == null ? "" : hours < 1 ? "Answered in under an hour" : hours < 24 ? `Answered in ${Math.round(hours)} hour${Math.round(hours) === 1 ? "" : "s"}` : `Answered in ${Math.round(hours / 24)} day${Math.round(hours / 24) === 1 ? "" : "s"}`;
+  const plan = gamePlan(req.grad_year, new Date(), typeof pl2.level === "string" ? pl2.level : null);
+  const thanks = thankYouNote({ athleteFirst: kid, coachLast: last ?? "", kind: req.answer_kind, detail: typeof pl2.name === "string" ? pl2.name : null });
+  const section = (title: string, inner: string) =>
+    `<div style="margin:18px 0 0;padding:16px;border-radius:14px;background:#F6F9FF;border:1px solid #DCE6FF;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${BLUE};font-weight:700;">${title}</div>${inner}</div>`;
+  const take = liked || workOn
+    ? section(`Coach ${esc(last)}'s take on ${esc(kid)}`,
+        (liked ? `<p style="margin:10px 0 0;font-size:15px;line-height:1.55;color:${NAVY};"><strong>👍 What stood out:</strong> ${esc(liked)}</p>` : "") +
+        (workOn ? `<p style="margin:8px 0 0;font-size:15px;line-height:1.55;color:${NAVY};"><strong>🎯 What to work on:</strong> ${esc(workOn)}</p>` : ""))
+    : "";
+  const card = report.length
+    ? section(`${esc(kid)}'s report card · from Coach ${esc(last)}`, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">${report.map((l) => {
+        if (l.value == null) return `<tr><td style="padding:6px 0;font-size:14px;color:${NAVY};width:38%;">${esc(l.label)}</td><td colspan="10" style="font-size:13px;color:${MUTED};">Not enough on film yet</td><td></td></tr>`;
+        const v = l.value;
+        const bar = Array.from({ length: 10 }, (_, i) => `<td style="width:5.4%;padding:0 1px;"><div style="height:8px;border-radius:3px;background:${i < v ? BLUE : "#DCE6FF"};"></div></td>`).join("");
+        return `<tr><td style="padding:6px 0;font-size:14px;color:${NAVY};width:38%;">${esc(l.label)}</td>${bar}<td style="padding-left:8px;font-size:13px;color:${NAVY};white-space:nowrap;"><strong>${v}</strong>/10 <span style="color:${MUTED};">${grade(v)}</span></td></tr>`;
+      }).join("")}</table><p style="margin:8px 0 0;font-size:12px;color:${MUTED};">Rated against college-level players at this position. 6+ = Good · 8+ = Strong.</p>`)
+    : "";
+  const planBox = section(`Your game plan · Class of ${esc(req.grad_year)}`,
+    `<ul style="margin:8px 0 0;padding-left:20px;font-size:15px;line-height:1.6;color:${NAVY};">${plan.map((x) => `<li style="margin:4px 0;">${esc(x)}</li>`).join("")}</ul>`);
+  const thanksBox = replyEnabled()
+    ? section("Stand out: send a thank-you", `<p style="margin:8px 0 0;font-size:14px;line-height:1.55;color:${NAVY};">Most athletes never follow up. Reply to this email with a short thank-you — here's one ${esc(kid)} can use:</p><p style="margin:8px 0 0;padding:10px 12px;border-radius:10px;background:#fff;border:1px solid #DCE6FF;font-size:14px;line-height:1.55;color:${NAVY};font-style:italic;">${esc(thanks)}</p>`)
+    : "";
   const steps = letter.steps.length
     ? `<div style="margin:18px 0 0;padding:16px;border-radius:14px;background:#F6F9FF;border:1px solid #DCE6FF;"><div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${BLUE};font-weight:700;">Your next steps</div><ol style="margin:8px 0 0;padding-left:20px;font-size:15px;line-height:1.6;color:${NAVY};">${letter.steps.map((s) => `<li style="margin:4px 0;">${s}</li>`).join("")}</ol></div>`
     : "";
   const html = layout({
-    preheader: `A personal answer from ${coach.full_name} about ${req.athlete_name}.`,
+    preheader: `A personal answer from ${coach.full_name} about ${req.athlete_name}${liked ? ` — what stood out: ${liked.slice(0, 60)}` : ""}.`,
     heading: `A personal answer from ${coach.full_name}`,
     bodyHtml:
+      p(`<span style="font-size:13px;color:${MUTED};">${esc([coach.title, school].filter(Boolean).join(" · "))}${speed ? ` · ⚡ ${speed}` : ""}</span>`) +
       `<div style="padding:4px 0 0;border-left:3px solid ${BLUE};padding-left:16px;">` +
       p(`Hi ${esc(parentFirst)},`) +
       letter.paragraphs.map((x) => p(x)).join("") +
       sig + `</div>` +
+      card + take +
       steps +
       (letter.cta ? `<p style="margin:18px 0 0;"><a href="${esc(letter.cta.url)}" style="display:inline-block;padding:13px 20px;background:${BLUE};color:#fff;border-radius:12px;font-weight:700;text-decoration:none;">${esc(letter.cta.label)} →</a></p>` : "") +
+      planBox + thanksBox +
       (replyEnabled()
         ? p(`<span style="font-size:13px;color:${MUTED};"><strong>Want to respond?</strong> Just reply to this email (or text us back) — we'll pass it straight to Coach ${esc(last)}. Your email and phone stay private.</span>`)
         : ""),
@@ -651,7 +683,10 @@ export function parentAnswer(a: {
     `Hi ${parentFirst},`, "",
     ...letter.paragraphs.map(strip).flatMap((x) => [x, ""]),
     `— Coach ${last}`, [coach.full_name, coach.title, school].filter(Boolean).join(" · "), "",
+    ...(liked || workOn ? [`COACH ${String(last).toUpperCase()}'S TAKE`, ...(liked ? [`What stood out: ${liked}`] : []), ...(workOn ? [`What to work on: ${workOn}`] : []), ""] : []),
+    ...(report.length ? ["REPORT CARD", ...report.map((l) => `${l.label}: ${l.value == null ? "not enough on film yet" : `${l.value}/10 (${grade(l.value)})`}`), ""] : []),
     ...(letter.steps.length ? ["YOUR NEXT STEPS", ...letter.steps.map((x, i) => `${i + 1}. ${strip(x)}`), ""] : []),
+    `YOUR GAME PLAN · CLASS OF ${req.grad_year}`, ...plan.map((x) => `- ${x}`), "",
     ...(letter.cta ? [`${letter.cta.label}: ${letter.cta.url}`, ""] : []),
     ...(a.askAnotherUrl ? [`Ask another school: ${a.askAnotherUrl}`, ""] : []),
     a.postalAddress,
@@ -724,7 +759,7 @@ export function draftConfirmYes(a: { school: string; priceCents: number; athlete
 
 export const lineSms = {
   coachAsk: (req: EvalRequest, url: string, earnCents: number, bonusHours?: number) =>
-    `The Athlete Market: ${req.athlete_name} (${req.grad_year} ${req.position}) asked about your program${earnCents > 0 ? ` — earn ${money(earnCents)} for answering${bonusHours ? ` within ${bonusHours}h` : ""}` : ""}. Answer in one tap: ${url} Reply STOP to opt out.`,
+    `The Athlete Market: ${req.athlete_name} (${req.grad_year} ${req.position}) asked about your program${earnCents > 0 ? ` — earn ${money(earnCents)} for answering${bonusHours ? ` within ${bonusHours}h` : ""}` : ""}. Answer here: ${url} Reply STOP to opt out.`,
   parentSent: (n: number, school: string, free = false) =>
     `The Athlete Market: your message is on its way to ${n === 1 ? school : `${n} schools`}. We'll text you the moment a coach answers.${free ? "" : " You're only charged if they do."} Reply STOP to opt out.`,
   parentOpened: (coachName: string) => `The Athlete Market: ${coachName} just opened your message 👀`,

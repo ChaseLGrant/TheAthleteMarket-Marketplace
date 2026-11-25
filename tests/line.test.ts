@@ -8,6 +8,7 @@ import { handleInboundEmail, replyAddress } from "@/lib/services/email-native";
 import { runCron } from "@/lib/services/cron";
 import { twilioSignature } from "@/lib/twilio-signature";
 
+const REPORT = { shooting: 7, ball_handling: 6, passing_vision: 8, defense: 5, athleticism: 7, basketball_iq: null };
 const SCHOOL = "Example University";
 type D = ReturnType<typeof makeDeps>["deps"];
 
@@ -72,7 +73,7 @@ describe("asking", () => {
     expect((invite.html.match(/<a /g) ?? []).length).toBeLessThanOrEqual(4);
     expect(invite.html).toContain("Coach Recruiter,");
     expect(invite.replyTo).toMatch(/^r-/);
-    expect(texts(deps, "+15550001111")[0]).toMatch(/Answer in one tap/);
+    expect(texts(deps, "+15550001111")[0]).toMatch(/Answer here: /);
     expect(mails(deps, "morgan@example.com").some((m) => m.subject.startsWith("Sent!"))).toBe(true);
     expect(texts(deps, "+15552223333")[0]).toMatch(/on its way to 2 schools/);
     expect(await deps.store.getSavedPayer("morgan@example.com")).not.toBeNull();
@@ -86,7 +87,7 @@ describe("asking", () => {
     await deps.store.updateCoach(rc.id, { stripe_account_id: id, stripe_transfers_active: true, stripe_details_submitted: true });
     const [req] = await place(deps);
     const camp = { name: "Elite Guard Camp", dates: "June 14–15", location: "Example Arena", url: "https://example.edu/camp" };
-    const r = await submitAnswer(deps, req!, (await deps.store.getCoach(rc.id))!, { kind: "camp", camp, note: "Loved the pace.", save: true, via: "link" });
+    const r = await submitAnswer(deps, req!, (await deps.store.getCoach(rc.id))!, { kind: "camp", camp, note: "Loved the pace.", save: true, via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     expect(r.status).toBe("completed");
     expect(deps.payments.captures).toEqual([req!.stripe_payment_intent_id]);
     const ans = mails(deps, "morgan@example.com").find((m) => /answered/.test(m.subject))!;
@@ -129,8 +130,8 @@ describe("asking", () => {
     const { rc, asst } = await staff(deps);
     const [req] = await place(deps);
     const results = await Promise.allSettled([
-      submitAnswer(deps, req!, rc, { kind: "update", via: "link" }),
-      submitAnswer(deps, req!, asst, { kind: "film", via: "link" }),
+      submitAnswer(deps, req!, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT }),
+      submitAnswer(deps, req!, asst, { kind: "film", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT }),
     ]);
     expect(results.filter((x) => x.status === "fulfilled")).toHaveLength(1);
     expect(String((results.find((x) => x.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/already answered/);
@@ -160,7 +161,7 @@ describe("the line stays open (two-way relay, email + SMS)", () => {
     const { deps } = makeDeps();
     const { rc } = await staff(deps);
     const [req] = await place(deps);
-    await submitAnswer(deps, req!, rc, { kind: "film", via: "link" });
+    await submitAnswer(deps, req!, rc, { kind: "film", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     const r = (await deps.store.getRequest(req!.id))!;
     expect(await handleInboundEmail(deps, { messageId: "t1", from: "morgan@example.com", to: [parentThreadAddress(r)], subject: "Re", text: "Here's a full game: https://youtu.be/zzzzzzzzzzz\n\nOn Tue X wrote:\n> old", attachments: [] })).toBe("relayed");
     const toCoach = mails(deps, "rc@example.edu").find((m) => /new message from the family/.test(m.subject))!;
@@ -215,7 +216,7 @@ describe("coach share setting", () => {
     const { rc } = await staff(deps);
     const [req] = await place(deps);
     expect(req!.coach_payout_cents).toBe(0);
-    const r = await submitAnswer(deps, req!, rc, { kind: "update", via: "link" });
+    const r = await submitAnswer(deps, req!, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     expect(r.payout_status).toBe("none");
     expect(deps.payments.transfers).toHaveLength(0);
   });
@@ -238,7 +239,7 @@ describe("coach answer page actions", () => {
     const after = (await deps.store.getRequest(r!.id))!;
     expect(after.escalation_index).toBe(1);
     expect(mails(deps, "asst@example.edu").length).toBeGreaterThan(0);
-    const done = await submitAnswer(deps, after, asst, { kind: "level", level: "D2", note: "Good feet.", via: "link" });
+    const done = await submitAnswer(deps, after, asst, { kind: "level", level: "D2", note: "Good feet.", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     expect(done.status).toBe("completed");
     expect(done.coach_id).toBe(asst.id);
   });
@@ -294,14 +295,14 @@ describe("fast-answer bonus", () => {
     expect(invite.html).toContain("You'll be paid <strong>$15</strong> for answering this one within 24 hours ($10 after)");
     expect(invite.html).toContain("pays coaches to answer their questions");
     expect(invite.subject).not.toMatch(/\$/);
-    const a = await submitAnswer(deps, (await deps.store.getRequest(fast!.id))!, rc, { kind: "update", via: "link" });
+    const a = await submitAnswer(deps, (await deps.store.getRequest(fast!.id))!, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     expect(a.coach_payout_cents).toBe(1500);
     expect(a.platform_fee_cents).toBe(500);
     expect(a.price_cents).toBe(2000);
 
     const [slow] = await place(deps, { purchaserEmail: "other@example.com", targets: [{ school: SCHOOL, sport: "Basketball (M)" }] });
     advance(25);
-    const b = await submitAnswer(deps, (await deps.store.getRequest(slow!.id))!, rc, { kind: "update", via: "link" });
+    const b = await submitAnswer(deps, (await deps.store.getRequest(slow!.id))!, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     expect(b.coach_payout_cents).toBe(1000);
     expect(b.platform_fee_cents).toBe(1000);
   });
@@ -312,7 +313,7 @@ describe("fast-answer bonus", () => {
     const { rc } = await staff(deps);
     const [r] = await place(deps);
     expect(mails(deps, "rc@example.edu")[0]!.html).toContain("You'll be paid <strong>$10</strong> for answering this one.");
-    expect((await submitAnswer(deps, (await deps.store.getRequest(r!.id))!, rc, { kind: "update", via: "link" })).coach_payout_cents).toBe(1000);
+    expect((await submitAnswer(deps, (await deps.store.getRequest(r!.id))!, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT })).coach_payout_cents).toBe(1000);
   });
 });
 
@@ -330,5 +331,32 @@ describe("abandoned Coach Line checkout", () => {
     expect(deps.mailer.sent.length).toBe(0);
     // Duplicate delivery is a no-op.
     await handleCheckoutExpired(deps, { id: order.stripe_checkout_session_id!, client_reference_id: null });
+  });
+});
+
+describe("report card", () => {
+  it("requires every tool rated (or 'can't tell'); the family gets a 1–10 report card with grades", async () => {
+    const { deps } = makeDeps();
+    const { rc } = await staff(deps);
+    const [r] = await place(deps);
+    const req = (await deps.store.getRequest(r!.id))!;
+    await expect(submitAnswer(deps, req, rc, { kind: "camp", via: "link", liked: "Quick first step", workOn: "Add strength", scores: { shooting: 7 } }))
+      .rejects.toThrow(/report card/);
+    await expect(submitAnswer(deps, req, rc, { kind: "update", via: "link", liked: "", workOn: "Add strength", scores: REPORT }))
+      .rejects.toThrow(/stood out|liked/);
+    const done = await submitAnswer(deps, req, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Off-hand finishing", scores: { ...REPORT, shooting: 12 } });
+    expect(done.status).toBe("completed");
+    const ans = mails(deps, "morgan@example.com").find((m) => /answered/.test(m.subject))!;
+    expect(ans.html).toContain("Taylor's report card");
+    expect(ans.html).toContain("<strong>8</strong>/10");           // passing / vision
+    expect(ans.html).toContain("Not enough on film yet");           // shooting 12 → invalid → "can't tell"; IQ null
+    expect(ans.text).toMatch(/REPORT CARD\nShooting: not enough on film yet\nBall handling: 6\/10 \(Good\)/);
+    expect(ans.html).toContain("What to work on:</strong> Off-hand finishing");
+    expect(ans.html).toContain("Your game plan · Class of 2027");
+  });
+  it("baseball pitchers get pitching tools; hitters get the five tools", async () => {
+    const { toolsFor } = await import("@/lib/coach-take");
+    expect(toolsFor("Baseball", "RHP").map((t) => t.label)).toEqual(["Velocity", "Command", "Off-speed", "Mechanics", "Competitiveness"]);
+    expect(toolsFor("Baseball", "SS").map((t) => t.label)).toEqual(["Hit", "Power", "Run", "Arm", "Field"]);
   });
 });

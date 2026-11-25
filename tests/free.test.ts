@@ -4,6 +4,7 @@ import { FreePayments } from "@/lib/integrations-free";
 import { createAskOrder, handleAskSetupCompleted, submitAnswer, type AskInput } from "@/lib/services/line";
 import { runCron } from "@/lib/services/cron";
 
+const REPORT = { shooting: 7, ball_handling: 6, passing_vision: 8, defense: 5, athleticism: 7, basketball_iq: null };
 const SCHOOL = "Example University";
 function freeDeps() {
   const m = makeDeps();
@@ -40,7 +41,7 @@ describe("payments off (free Coach Line)", () => {
     expect(receipt.html + receipt.text).not.toMatch(/charged|hold/i);
     expect(deps.sms.sent.every((s) => !/charged/.test(s.body))).toBe(true);
 
-    const done = await submitAnswer(deps, req!, rc, { kind: "update", via: "link" });
+    const done = await submitAnswer(deps, req!, rc, { kind: "update", via: "link", liked: "Quick first step", workOn: "Add strength", scores: REPORT });
     expect(done.status).toBe("completed");
     expect(done.payout_status).toBe("none");
     expect(deps.mailer.sent.some((m) => m.to === "morgan@example.com" && /answered/.test(m.subject))).toBe(true);

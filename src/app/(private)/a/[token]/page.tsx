@@ -9,7 +9,7 @@ import { fastBonus, resolveAnswerLink } from "@/lib/services/line";
 export const dynamic = "force-dynamic";
 const KINDS = ["camp", "event", "film", "update", "level", "personal"] as const;
 
-/** Coach Line: the coach answers in one tap. Opening this page never answers anything (link scanners are safe). */
+/** Coach Line: the coach answers with a quick report card. Opening this page never answers anything (link scanners are safe). */
 export default async function AnswerPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ k?: string }> }) {
   const [{ token }, { k }] = await Promise.all([params, searchParams]);
   const deps = await getDeps();
@@ -52,12 +52,12 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
             {bonus?.cents ? (
               <>
                 <p className="text-lg font-extrabold">💵 Answer in the next {bonusHoursLeft} hours: earn {amount}</p>
-                <p className="text-sm">Includes a {money(bonus.cents)} fast-answer bonus (after that, {money(bonus.base)}). One tap below — about 30 seconds.</p>
+                <p className="text-sm">Includes a {money(bonus.cents)} fast-answer bonus (after that, {money(bonus.base)}). A quick report card below — about 2 minutes.</p>
               </>
             ) : (
               <>
                 <p className="text-lg font-extrabold">💵 You get paid {amount} for answering</p>
-                <p className="text-sm">One tap below — about 30 seconds. Paid to your bank through Stripe.</p>
+                <p className="text-sm">A quick report card below — about 2 minutes. Paid to your bank through Stripe.</p>
               </>
             )}
           </div>
@@ -79,8 +79,8 @@ export default async function AnswerPage({ params, searchParams }: { params: Pro
         </div>
       </div>
       <div className="card p-5">
-        <h2 className="mb-3 text-lg font-bold">Answer in one tap</h2>
-        <AnswerForm token={token} first={first} amount={amount} camps={coach.camps ?? []} events={coach.events ?? []} initialKind={initialKind} payoutUrl={payoutUrl}
+        <h2 className="mb-3 text-lg font-bold">Your answer · about 2 minutes</h2>
+        <AnswerForm token={token} first={first} amount={amount} camps={coach.camps ?? []} events={coach.events ?? []} initialKind={initialKind} payoutUrl={payoutUrl} sport={req.sport} position={req.position} coachLast={coach.full_name.split(" ").slice(-1)[0] ?? ""}
           canPass={req.escalation_index < req.escalation_ids.length - 1} />
       </div>
     </div>

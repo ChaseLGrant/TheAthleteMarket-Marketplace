@@ -257,6 +257,10 @@ export interface AnswerInput {
   level?: string | null;
   save?: boolean;
   via: "link" | "email";
+  /** Coach's Take (required on the answer page): report card (1–10 per tool), what stood out, what to work on. */
+  liked?: string | null;
+  workOn?: string | null;
+  scores?: unknown;
 }
 
 export function answerSummary(kind: AnswerKind, pl: Record<string, unknown>): string {
@@ -289,6 +293,18 @@ export async function submitAnswer(deps: Deps, req: EvalRequest, coach: Coach, a
   if (!req.escalation_ids.includes(coach.id)) throw new UserFacingError("This request isn't addressed to you.");
   const now = iso(deps.now());
   const payload: Record<string, unknown> = { note: a.note?.trim() || null };
+  // Every answer from the answer page carries something personal — that's what families pay for.
+  if (a.via === "link") {
+    const liked = a.liked?.trim(), workOn = a.workOn?.trim();
+    if (!liked || liked.length < 3) throw new UserFacingError("Add one thing you liked about the athlete.");
+    if (!workOn || workOn.length < 3) throw new UserFacingError("Add one thing for the athlete to work on.");
+    payload.liked = liked.slice(0, 500);
+    payload.workOn = workOn.slice(0, 500);
+    const { cleanReport } = await import("../coach-take");
+    const report = cleanReport(a.scores, req.sport, req.position);
+    if (!report.complete) throw new UserFacingError("Rate each skill on the report card (or mark “can't tell”).");
+    payload.report = report.lines;
+  }
   if (a.kind === "camp") {
     const c = a.camp ?? coach.camps?.[0];
     if (!c?.name || !c?.dates) throw new UserFacingError("Add your camp name and dates.");
@@ -313,7 +329,7 @@ export async function submitAnswer(deps: Deps, req: EvalRequest, coach: Coach, a
     {
       status: "submitted", submitted_at: now, accepted_at: req.accepted_at ?? now, coach_id: coach.id,
       answer_kind: a.kind, answer_payload: payload, response_kind: "written",
-      response_text: answerSummary(a.kind, payload) + (payload.note && a.kind !== "personal" ? `\n\n${payload.note}` : ""),
+      response_text: [answerSummary(a.kind, payload), payload.liked ? `Liked: ${payload.liked}` : "", payload.workOn ? `Work on: ${payload.workOn}` : "", payload.note && a.kind !== "personal" ? String(payload.note) : ""].filter(Boolean).join("\n\n"),
       level_read: a.kind === "level" ? String(payload.level) : req.level_read, response_from: a.via,
       ...(bonus.cents > 0 ? { coach_payout_cents: req.coach_payout_cents + bonus.cents, platform_fee_cents: req.price_cents - req.coach_payout_cents - bonus.cents } : {}),
     },

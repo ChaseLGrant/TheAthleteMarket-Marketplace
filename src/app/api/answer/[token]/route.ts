@@ -16,6 +16,9 @@ const schema = z.discriminatedUnion("action", [
     event: item.omit({ url: true }).optional(),
     level: s(40),
     save: z.boolean().optional(),
+    liked: s(500),
+    workOn: s(500),
+    scores: z.record(z.string(), z.number().nullable()).optional(),
   }),
 ]);
 
@@ -32,6 +35,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     const d = b.data;
     const r = await submitAnswer(deps, found.req, found.coach, {
       kind: d.kind, note: d.note ?? null, camp: d.camp ?? null, event: d.event ?? null, level: d.level ?? null, save: d.save, via: "link",
+      liked: d.liked ?? null, workOn: d.workOn ?? null, scores: d.scores,
     });
     return json({ status: r.status });
   } catch (e) {
